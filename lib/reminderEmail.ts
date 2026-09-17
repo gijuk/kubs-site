@@ -23,7 +23,7 @@ export async function sendReminderEmail(to: string, schedule: ReminderScheduleIn
   const fromAddress =
     process.env.REMINDER_FROM_EMAIL || "KUBS, in one place <onboarding@resend.dev>";
 
-  await resend.emails.send({
+  const { error } = await resend.emails.send({
     from: fromAddress,
     to,
     subject: `[일정 알림] ${schedule.title}`,
@@ -39,6 +39,12 @@ export async function sendReminderEmail(to: string, schedule: ReminderScheduleIn
       </div>
     `,
   });
+
+  // Resend SDK는 API 에러를 던지지 않고 { error } 필드로 돌려주는 경우가 있어
+  // 반드시 직접 확인해서 던져야 호출부의 "발송 성공" 처리가 정확해집니다.
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
