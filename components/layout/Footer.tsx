@@ -11,11 +11,6 @@ const SNS_LINKS = [
     href: "https://www.instagram.com/kubs1905_official/",
     icon: Instagram,
   },
-  {
-    label: "카카오톡 채널",
-    href: "https://pf.kakao.com/_XvBZX",
-    icon: MessageCircleMore,
-  },
 ];
 
 export default function Footer() {
@@ -34,7 +29,7 @@ export default function Footer() {
           </div>
 
           <div>
-            <p className="text-sm font-medium text-ink">학생회 채널</p>
+            <p className="text-sm font-medium text-ink">공지 채널</p>
             <ul className="mt-4 space-y-3">
               {SNS_LINKS.map(({ label, href, icon: Icon }) => (
                 <li key={label}>
@@ -62,6 +57,17 @@ export default function Footer() {
                 >
                   <Mail size={16} strokeWidth={1.75} />
                   kubs.student@gmail.com
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://pf.kakao.com/_XvBZX"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-2 text-sm text-ink-soft transition-colors hover:text-crimson"
+                >
+                  <MessageCircleMore size={16} strokeWidth={1.75} />
+                  카카오톡 채널
                 </a>
               </li>
               <li>
