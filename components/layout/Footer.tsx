@@ -2,13 +2,18 @@ import { Instagram, Mail, MessageCircleMore, Lock } from "lucide-react";
 
 const SNS_LINKS = [
   {
-    label: "Instagram",
-    href: "https://instagram.com/kubs.student.council",
+    label: "학생회 인스타그램",
+    href: "https://www.instagram.com/kubs.student/",
+    icon: Instagram,
+  },
+  {
+    label: "경영대학 공식 인스타그램",
+    href: "https://www.instagram.com/kubs1905_official/",
     icon: Instagram,
   },
   {
     label: "카카오톡 채널",
-    href: "https://pf.kakao.com/",
+    href: "https://pf.kakao.com/_XvBZX",
     icon: MessageCircleMore,
   },
 ];
@@ -52,11 +57,11 @@ export default function Footer() {
             <ul className="mt-4 space-y-3">
               <li>
                 <a
-                  href="mailto:kubs.council@example.com"
+                  href="mailto:kubs.student@gmail.com"
                   className="flex items-center gap-2 text-sm text-ink-soft transition-colors hover:text-crimson"
                 >
                   <Mail size={16} strokeWidth={1.75} />
-                  kubs.council@example.com
+                  kubs.student@gmail.com
                 </a>
               </li>
               <li>
