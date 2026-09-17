@@ -49,3 +49,31 @@ export const CATEGORY_LABEL: Record<ScheduleCategory, string> = {
   council: "학생회 사업",
   event: "학교 행사",
 };
+
+export type PromotionCategory = "club" | "event" | "ilhof" | "recruit" | "etc";
+
+export interface Promotion {
+  id: string;
+  category: PromotionCategory;
+  title: string;
+  content: string;
+  author: string;
+  link?: string;
+  imageSrc?: string;
+  createdAt: string;
+}
+
+export type PromotionStatus = "pending" | "approved";
+
+export interface AdminPromotion extends Promotion {
+  status: PromotionStatus;
+  storagePath: string | null;
+}
+
+export const PROMOTION_CATEGORY_LABEL: Record<PromotionCategory, string> = {
+  club: "동아리 홍보",
+  event: "행사 홍보",
+  ilhof: "일일호프",
+  recruit: "리크루팅",
+  etc: "기타",
+};

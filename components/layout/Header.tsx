@@ -6,6 +6,7 @@ import { Menu, X } from "lucide-react";
 const NAV_ITEMS = [
   { href: "#this-week", label: "이번 주" },
   { href: "#archive", label: "포토 아카이브" },
+  { href: "#promotions", label: "홍보 게시판" },
   { href: "#faq", label: "FAQ" },
   { href: "#map", label: "캠퍼스 맵" },
 ];

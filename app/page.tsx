@@ -3,6 +3,7 @@ import Footer from "@/components/layout/Footer";
 import HeroSection from "@/components/hero/HeroSection";
 import ThisWeekSection from "@/components/schedule/ThisWeekSection";
 import PhotoArchiveSection from "@/components/archive/PhotoArchiveSection";
+import PromotionSection from "@/components/promotions/PromotionSection";
 import FaqSection from "@/components/faq/FaqSection";
 import KubsMapSection from "@/components/map/KubsMapSection";
 import KubsHistoryGameSection from "@/components/game/KubsHistoryGameSection";
@@ -20,6 +21,7 @@ export default function Home() {
         <HeroSection />
         <ThisWeekSection />
         <PhotoArchiveSection />
+        <PromotionSection />
         <FaqSection />
         <KubsMapSection />
         <KubsHistoryGameSection />

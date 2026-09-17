@@ -1,9 +1,11 @@
 import { LogOut } from "lucide-react";
 import { getAllSchedules } from "@/lib/data/schedules";
 import { getAllPhotosForAdmin } from "@/lib/data/photos";
+import { getAllPromotionsForAdmin } from "@/lib/data/promotions";
 import { logoutAction } from "./login/actions";
 import AdminScheduleManager from "./AdminScheduleManager";
 import AdminPhotoManager from "./AdminPhotoManager";
+import AdminPromotionManager from "./AdminPromotionManager";
 
 export const dynamic = "force-dynamic";
 
@@ -12,9 +14,10 @@ export const metadata = {
 };
 
 export default async function AdminPage() {
-  const [items, photos] = await Promise.all([
+  const [items, photos, promotions] = await Promise.all([
     getAllSchedules(),
     getAllPhotosForAdmin(),
+    getAllPromotionsForAdmin(),
   ]);
 
   return (
@@ -57,6 +60,20 @@ export default async function AdminPage() {
           </p>
           <div className="mt-6">
             <AdminPhotoManager items={photos} />
+          </div>
+        </div>
+
+        <div className="mt-16 border-t border-ivory-line pt-10">
+          <h2 className="font-serif text-xl font-semibold text-ink">
+            홍보 게시판 관리
+          </h2>
+          <p className="mt-2 max-w-[60ch] text-sm leading-relaxed text-ink-faint">
+            학생들이 올린 동아리·행사·일일호프·리크루팅 홍보물은 승인 전까지
+            메인 페이지에 노출되지 않습니다. 아래에서 승인하거나 삭제할 수
+            있습니다.
+          </p>
+          <div className="mt-6">
+            <AdminPromotionManager items={promotions} />
           </div>
         </div>
       </div>

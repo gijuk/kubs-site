@@ -85,3 +85,44 @@ on conflict (id) do nothing;
 -- 일정 알림(리마인더) 기능은 제거되었습니다.
 -- 기존에 schedule_reminders 테이블을 만들었다면 아래 줄의 주석을 해제해서 정리하세요.
 -- drop table if exists schedule_reminders;
+
+-- ============================================================
+-- 학생 홍보 게시판: promotions 테이블 + Storage 버킷
+-- 동아리/행사/일일호프/리크루팅 홍보를 학생이 직접 올리고,
+-- 관리자 승인 후에만 사이트에 노출됩니다.
+-- ============================================================
+
+create table if not exists promotions (
+  id uuid primary key default gen_random_uuid(),
+  category text not null check (category in ('club', 'event', 'ilhof', 'recruit', 'etc')),
+  title text not null,
+  content text not null,
+  author text not null,
+  link text,
+  image_src text,
+  storage_path text,
+  status text not null default 'pending' check (status in ('pending', 'approved')),
+  created_at timestamptz not null default now()
+);
+
+-- 승인된 홍보물만 사이트 방문자에게 노출합니다. 승인 대기 중인 글은 관리자만 볼 수 있습니다
+-- (관리자 페이지는 Service Role Key로 조회하므로 이 정책과 무관하게 전부 조회됩니다).
+alter table promotions enable row level security;
+
+drop policy if exists "Public can read approved promotions" on promotions;
+create policy "Public can read approved promotions"
+  on promotions
+  for select
+  using (status = 'approved');
+
+-- 업로드/승인/삭제는 정책을 만들지 않습니다.
+-- /promotions/actions.ts 의 서버 액션이 Service Role Key를 사용해
+-- RLS를 우회하므로 별도 정책이 없어도 동작합니다.
+
+create index if not exists promotions_created_at_idx on promotions (created_at desc);
+create index if not exists promotions_status_idx on promotions (status);
+
+-- 홍보물 이미지를 담을 공개 Storage 버킷 생성
+insert into storage.buckets (id, name, public)
+values ('promotions', 'promotions', true)
+on conflict (id) do nothing;
