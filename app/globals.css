@@ -1,0 +1,66 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: "Pretendard", -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+* {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+body {
+  background-color: #fbf9f4;
+  color: #1d1b18;
+  /* 한글 단어가 음절 단위로 중간에 잘려서 다음 줄로 넘어가지 않도록,
+     띄어쓰기(단어 경계)에서만 줄바꿈되게 합니다. */
+  word-break: keep-all;
+}
+
+::selection {
+  background-color: #7a0c2e;
+  color: #fbf9f4;
+}
+
+:focus-visible {
+  outline: 2px solid #7a0c2e;
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/* horizontal scroll containers keep a slim, quiet scrollbar */
+.slim-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+.slim-scroll::-webkit-scrollbar-thumb {
+  background-color: #e6e0d3;
+  border-radius: 999px;
+}
+.slim-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.marquee-track:hover .marquee-content {
+  animation-play-state: paused;
+}
+
+.reveal {
+  opacity: 0;
+}
+.reveal.in-view {
+  animation: fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
