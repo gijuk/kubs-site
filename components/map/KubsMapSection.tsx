@@ -7,16 +7,18 @@ export default function KubsMapSection() {
       className="border-t border-ivory-line bg-ivory-soft px-6 py-24 md:px-10"
     >
       <div className="mx-auto max-w-editorial">
-        <p className="mb-2 text-sm text-crimson">캠퍼스</p>
-        <h2 className="font-serif text-3xl font-semibold text-ink md:text-4xl">
-          KUBS Map
-        </h2>
-        <p className="mt-3 max-w-[50ch] text-sm leading-relaxed text-ink-faint">
-          경영본관 · LG-POSCO경영관 · 현대자동차경영관, 서로 연결된 세 건물의
-          층별 구조를 확인하세요.
-        </p>
+        <div className="reveal">
+          <p className="mb-2 text-sm text-crimson">캠퍼스</p>
+          <h2 className="font-serif text-3xl font-semibold text-ink md:text-4xl">
+            KUBS Map
+          </h2>
+          <p className="mt-3 max-w-[50ch] text-sm leading-relaxed text-ink-faint">
+            경영본관 · LG-POSCO경영관 · 현대자동차경영관, 서로 연결된 세
+            건물의 층별 구조를 확인하세요.
+          </p>
+        </div>
 
-        <div className="mt-10">
+        <div className="reveal mt-10" style={{ "--reveal-delay": "120ms" } as React.CSSProperties}>
           <CampusMapExplorer />
         </div>
 

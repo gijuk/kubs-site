@@ -13,14 +13,17 @@ const CATEGORY_STYLE: Record<Promotion["category"], string> = {
 export default function PromotionCard({
   promotion,
   onSelect,
+  index = 0,
 }: {
   promotion: Promotion;
   onSelect: (promotion: Promotion) => void;
+  index?: number;
 }) {
   return (
     <button
       onClick={() => onSelect(promotion)}
-      className="group flex w-full flex-col overflow-hidden rounded-xl border border-ivory-line bg-ivory text-left transition-colors hover:border-crimson/40"
+      className="reveal group flex w-full flex-col overflow-hidden rounded-xl border border-ivory-line bg-ivory text-left transition-all hover:-translate-y-1 hover:border-crimson/40 hover:shadow-lg"
+      style={{ "--reveal-delay": `${Math.min(index, 8) * 60}ms` } as React.CSSProperties}
     >
       {promotion.imageSrc ? (
         // eslint-disable-next-line @next/next/no-img-element

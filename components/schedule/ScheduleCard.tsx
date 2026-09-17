@@ -14,15 +14,21 @@ const CATEGORY_STYLE: Record<ScheduleItem["category"], string> = {
 interface ScheduleCardProps {
   item: ScheduleItem;
   onSelect: (item: ScheduleItem) => void;
+  index?: number;
 }
 
-export default function ScheduleCard({ item, onSelect }: ScheduleCardProps) {
+export default function ScheduleCard({
+  item,
+  onSelect,
+  index = 0,
+}: ScheduleCardProps) {
   const dday = getDday(item.date);
 
   return (
     <button
       onClick={() => onSelect(item)}
-      className="group flex w-full flex-col gap-4 border-b border-ivory-line py-6 text-left transition-colors last:border-b-0 hover:bg-ivory-soft md:flex-row md:items-center md:justify-between md:px-2"
+      className="reveal group flex w-full flex-col gap-4 border-b border-ivory-line py-6 text-left transition-colors last:border-b-0 hover:bg-ivory-soft md:flex-row md:items-center md:justify-between md:px-2"
+      style={{ "--reveal-delay": `${Math.min(index, 6) * 70}ms` } as React.CSSProperties}
     >
       <div className="flex items-start gap-4 md:items-center">
         <span

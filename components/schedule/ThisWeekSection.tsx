@@ -11,7 +11,7 @@ export default async function ThisWeekSection() {
       className="border-t border-ivory-line bg-ivory px-6 py-24 md:px-10"
     >
       <div className="mx-auto max-w-editorial">
-        <div className="flex items-end justify-between gap-6">
+        <div className="reveal flex items-end justify-between gap-6">
           <div>
             <p className="mb-2 text-sm text-crimson">일정</p>
             <h2 className="font-serif text-3xl font-semibold text-ink md:text-4xl">

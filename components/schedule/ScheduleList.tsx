@@ -19,8 +19,13 @@ export default function ScheduleList({ items }: { items: ScheduleItem[] }) {
   return (
     <>
       <div>
-        {items.map((item) => (
-          <ScheduleCard key={item.id} item={item} onSelect={setSelected} />
+        {items.map((item, index) => (
+          <ScheduleCard
+            key={item.id}
+            item={item}
+            onSelect={setSelected}
+            index={index}
+          />
         ))}
       </div>
 

@@ -26,7 +26,7 @@ export default function HeroSection() {
       />
 
       <div className="relative z-10 mx-auto grid w-full max-w-editorial gap-10 md:grid-cols-[1fr_auto] md:items-end">
-        <div>
+        <div className="reveal">
           <p className="mb-5 font-serif text-sm text-crimson">
             {getTodayLabel()}
           </p>
@@ -37,7 +37,10 @@ export default function HeroSection() {
           </h1>
         </div>
 
-        <div className="max-w-[34ch] text-sm leading-relaxed text-ink-soft md:text-right md:text-[15px]">
+        <div
+          className="reveal max-w-[34ch] text-sm leading-relaxed text-ink-soft md:text-right md:text-[15px]"
+          style={{ "--reveal-delay": "150ms" } as React.CSSProperties}
+        >
           <p>
             학사 일정부터 학생회 소식, 사진 아카이브, 자주 묻는 질문까지 —
             고려대 경영대학 생활에 필요한 정보를 한 화면에 모았습니다.

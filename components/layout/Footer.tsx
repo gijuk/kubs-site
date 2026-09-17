@@ -17,7 +17,7 @@ export default function Footer() {
   return (
     <footer className="border-t border-ivory-line bg-ivory-soft">
       <div className="mx-auto max-w-editorial px-6 py-16 md:px-10">
-        <div className="grid gap-12 md:grid-cols-3">
+        <div className="reveal grid gap-12 md:grid-cols-3">
           <div>
             <p className="font-serif text-xl font-semibold text-ink">
               KUBS, in one place

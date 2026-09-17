@@ -4,11 +4,20 @@ import { useState } from "react";
 import { Plus } from "lucide-react";
 import type { FaqItem } from "@/lib/types";
 
-export default function FaqAccordionItem({ item }: { item: FaqItem }) {
+export default function FaqAccordionItem({
+  item,
+  index = 0,
+}: {
+  item: FaqItem;
+  index?: number;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="border-b border-ivory-line">
+    <div
+      className="reveal border-b border-ivory-line"
+      style={{ "--reveal-delay": `${Math.min(index, 8) * 50}ms` } as React.CSSProperties}
+    >
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between gap-4 py-5 text-left"

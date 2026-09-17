@@ -10,7 +10,7 @@ export default async function PromotionSection() {
       id="promotions"
       className="border-t border-ivory-line bg-ivory py-24"
     >
-      <div className="mx-auto flex max-w-editorial items-end justify-between gap-6 px-6 md:px-10">
+      <div className="reveal mx-auto flex max-w-editorial items-end justify-between gap-6 px-6 md:px-10">
         <div>
           <p className="mb-2 text-sm text-crimson">홍보</p>
           <h2 className="font-serif text-3xl font-semibold text-ink md:text-4xl">

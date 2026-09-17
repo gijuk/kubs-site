@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Noto_Serif_KR } from "next/font/google";
+import ScrollReveal from "@/components/common/ScrollReveal";
 import "./globals.css";
 
 const notoSerifKR = Noto_Serif_KR({
@@ -22,7 +23,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko" className={notoSerifKR.variable}>
-      <body className="font-sans antialiased">{children}</body>
+      <body className="font-sans antialiased">
+        {children}
+        <ScrollReveal />
+      </body>
     </html>
   );
 }

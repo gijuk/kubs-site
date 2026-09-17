@@ -33,10 +33,12 @@ export default function FaqSection() {
   return (
     <section id="faq" className="border-t border-ivory-line bg-ivory px-6 py-24 md:px-10">
       <div className="mx-auto max-w-editorial">
-        <p className="mb-2 text-sm text-crimson">FAQ</p>
-        <h2 className="font-serif text-3xl font-semibold text-ink md:text-4xl">
-          자주 묻는 질문
-        </h2>
+        <div className="reveal">
+          <p className="mb-2 text-sm text-crimson">FAQ</p>
+          <h2 className="font-serif text-3xl font-semibold text-ink md:text-4xl">
+            자주 묻는 질문
+          </h2>
+        </div>
 
         <div className="mt-10 flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <FaqCategoryFilter
@@ -51,8 +53,8 @@ export default function FaqSection() {
 
         <div className="mt-6">
           {filtered.length > 0 ? (
-            filtered.map((item) => (
-              <FaqAccordionItem key={item.id} item={item} />
+            filtered.map((item, index) => (
+              <FaqAccordionItem key={item.id} item={item} index={index} />
             ))
           ) : (
             <p className="py-12 text-center text-sm text-ink-faint">

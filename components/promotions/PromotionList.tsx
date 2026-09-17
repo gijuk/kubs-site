@@ -23,11 +23,12 @@ export default function PromotionList({
   return (
     <>
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {promotions.map((promotion) => (
+        {promotions.map((promotion, index) => (
           <PromotionCard
             key={promotion.id}
             promotion={promotion}
             onSelect={setSelected}
+            index={index}
           />
         ))}
       </div>
