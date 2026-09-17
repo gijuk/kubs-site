@@ -36,14 +36,6 @@ export interface FaqItem {
   answer: string;
 }
 
-export interface CampusFacility {
-  id: string;
-  name: string;
-  building: string;
-  floor: string;
-  description: string;
-}
-
 export const CATEGORY_LABEL: Record<ScheduleCategory, string> = {
   academic: "학사 일정",
   council: "학생회 사업",

@@ -1,9 +1,4 @@
-import type {
-  CampusFacility,
-  FaqItem,
-  Photo,
-  ScheduleItem,
-} from "./types";
+import type { FaqItem, Photo, ScheduleItem } from "./types";
 
 // 날짜는 데모용으로 오늘(빌드 시점) 근처로 채워져 있습니다.
 // 실제 운영 시 이 파일을 CMS나 API 응답으로 교체하세요.
@@ -153,36 +148,5 @@ export const faqItems: FaqItem[] = [
     question: "전공 필수 과목을 재수강하면 성적은 어떻게 반영되나요?",
     answer:
       "가장 최근에 이수한 성적으로 대체되며, 이전 성적은 성적표에 재수강으로 표기되어 남습니다. GPA 계산에는 최신 성적만 반영됩니다.",
-  },
-];
-
-export const facilities: CampusFacility[] = [
-  {
-    id: "fac-01",
-    name: "경영본관",
-    building: "경영본관",
-    floor: "지상 5층 · 지하 2층",
-    description: "학과 사무실, 대형 강의실, 지하 스터디룸이 위치합니다.",
-  },
-  {
-    id: "fac-02",
-    name: "LG-POSCO경영관",
-    building: "LG-POSCO관",
-    floor: "지상 6층",
-    description: "대강당, 세미나실, 교수 연구실이 있습니다.",
-  },
-  {
-    id: "fac-03",
-    name: "SK미래관",
-    building: "SK미래관",
-    floor: "지상 8층",
-    description: "국제회의실과 케이스 스터디 전용 강의실을 운영합니다.",
-  },
-  {
-    id: "fac-04",
-    name: "경영대 라운지",
-    building: "경영본관 1층",
-    floor: "1층",
-    description: "휴게 공간, 사물함, 학생회 부스가 위치합니다.",
   },
 ];
