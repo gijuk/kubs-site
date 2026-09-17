@@ -82,27 +82,6 @@ insert into storage.buckets (id, name, public)
 values ('photos', 'photos', true)
 on conflict (id) do nothing;
 
--- ============================================================
--- 일정 알림(리마인더) 예약: schedule_reminders 테이블
--- 관심 있는 일정에 이메일을 등록하면 D-1에 Resend로 메일이 발송됩니다.
--- ============================================================
-
-create table if not exists schedule_reminders (
-  id uuid primary key default gen_random_uuid(),
-  schedule_id uuid not null references schedules(id) on delete cascade,
-  email text not null,
-  notified_at timestamptz,
-  created_at timestamptz not null default now(),
-  unique (schedule_id, email)
-);
-
--- 이메일이 포함된 개인정보라 공개 조회/등록 정책을 만들지 않습니다.
--- 등록은 /schedule/actions.ts 서버 액션이, 발송은 /api/reminders 크론이
--- 모두 Service Role Key로 접근하므로 별도 정책 없이도 동작합니다.
-alter table schedule_reminders enable row level security;
-
-create index if not exists schedule_reminders_schedule_id_idx
-  on schedule_reminders (schedule_id);
-create index if not exists schedule_reminders_pending_idx
-  on schedule_reminders (schedule_id)
-  where notified_at is null;
+-- 일정 알림(리마인더) 기능은 제거되었습니다.
+-- 기존에 schedule_reminders 테이블을 만들었다면 아래 줄의 주석을 해제해서 정리하세요.
+-- drop table if exists schedule_reminders;

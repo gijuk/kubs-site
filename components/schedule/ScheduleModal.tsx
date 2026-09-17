@@ -5,7 +5,6 @@ import { X, CalendarDays, MapPin, Users } from "lucide-react";
 import type { ScheduleItem } from "@/lib/types";
 import { CATEGORY_LABEL } from "@/lib/types";
 import { formatKoreanDate, getDday } from "@/hooks/useCountdown";
-import ReminderButton from "./ReminderButton";
 
 interface ScheduleModalProps {
   item: ScheduleItem;
@@ -78,12 +77,6 @@ export default function ScheduleModal({ item, onClose }: ScheduleModalProps) {
         <p className="mt-6 text-sm leading-relaxed text-ink-soft">
           {item.description}
         </p>
-
-        {!dday.isPast && (
-          <div className="mt-6 border-t border-ivory-line pt-6">
-            <ReminderButton scheduleId={item.id} />
-          </div>
-        )}
       </div>
     </div>
   );
