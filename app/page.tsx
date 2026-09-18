@@ -7,6 +7,7 @@ import PromotionSection from "@/components/promotions/PromotionSection";
 import FaqSection from "@/components/faq/FaqSection";
 import KubsMapSection from "@/components/map/KubsMapSection";
 import KubsHistoryGameSection from "@/components/game/KubsHistoryGameSection";
+import ShooterGameSection from "@/components/shooter/ShooterGameSection";
 
 // 일정 등록/수정 후 최대 60초 이내에 방문자 화면에 반영됩니다.
 // (관리자 페이지에서 저장 시에는 즉시 반영되도록 revalidatePath도 함께 호출합니다.)
@@ -25,6 +26,7 @@ export default function Home() {
         <FaqSection />
         <KubsMapSection />
         <KubsHistoryGameSection />
+        <ShooterGameSection />
       </main>
       <Footer />
     </>
