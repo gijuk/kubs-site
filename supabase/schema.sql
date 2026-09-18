@@ -171,3 +171,22 @@ alter table suggestions enable row level security;
 
 create index if not exists suggestions_created_at_idx on suggestions (created_at desc);
 create index if not exists suggestions_is_read_idx on suggestions (is_read);
+
+-- ============================================================
+-- KUBS History Game 전체 랭킹: game_scores 테이블
+-- 플레이어(브라우저)마다 최고 기록 1개만 저장합니다. 공개 정책이 없으므로
+-- 등록/조회는 모두 /app/game/actions.ts 서버 액션(Service Role Key)이 처리합니다.
+-- 잘못된(장난) 기록은 Supabase Table Editor에서 행을 삭제하면 랭킹에서 사라집니다.
+-- ============================================================
+
+create table if not exists game_scores (
+  player_id uuid primary key,
+  nickname text not null check (char_length(nickname) between 1 and 12),
+  score integer not null check (score between 1 and 5000),
+  level integer not null default 0,
+  updated_at timestamptz not null default now()
+);
+
+alter table game_scores enable row level security;
+
+create index if not exists game_scores_score_idx on game_scores (score desc, updated_at asc);

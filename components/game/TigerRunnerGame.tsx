@@ -1,10 +1,11 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { kubsHistory, type KubsHistoryEntry } from "@/lib/data/kubsHistory";
 import { drawObstacle, drawTiger } from "./tigerSprites";
 import Portal from "@/components/common/Portal";
 import HistoryFilmModal from "./HistoryFilmModal";
+import GameLeaderboard, { type FinishedRun } from "./GameLeaderboard";
 import { GROUND_Y, TIGER_X, WORLD_H, WORLD_W } from "./gameConstants";
 import {
   FLY_BASE_Y,
@@ -82,10 +83,14 @@ export default function TigerRunnerGame() {
   const [historySeenCount, setHistorySeenCount] = useState(0);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [speedFlash, setSpeedFlash] = useState<number | null>(null);
+  const [run, setRun] = useState<FinishedRun | null>(null);
 
   const phaseRef = useRef<Phase>("idle");
   const engineRef = useRef<EngineState>(createEngine());
   const bestRef = useRef(0);
+  const globalTopRef = useRef(0);
+  const playMsRef = useRef(0);
+  const runIdRef = useRef(0);
   const visibleRatioRef = useRef(0);
   const jumpBufferRef = useRef(0);
   const particlesRef = useRef<Particle[]>([]);
@@ -159,6 +164,8 @@ export default function TigerRunnerGame() {
     setHistorySeenCount(0);
     setNewBest(false);
     setSpeedFlash(null);
+    setRun(null);
+    playMsRef.current = 0;
     setPhaseBoth("playing");
   }, []);
 
@@ -290,6 +297,8 @@ export default function TigerRunnerGame() {
       setNewBest(isNewBest && score > 0);
       setFinalScore(score);
       setFinalLevel(s.level);
+      runIdRef.current += 1;
+      setRun({ id: runIdRef.current, score, durationMs: Math.round(playMsRef.current) });
       shakeRef.current = 14;
       spawnBurst(TIGER_X + 22, s.posY + 16);
       restartUnlockRef.current = performance.now() + RESTART_LOCK_MS;
@@ -306,6 +315,7 @@ export default function TigerRunnerGame() {
 
       if (currentPhase === "playing") {
         // 큰 dt는 잘게 나눠서 계산 (빠른 장애물이 호랑이를 통과해버리는 것을 방지)
+        playMsRef.current += dt * 16.6667;
         const n = Math.max(1, Math.ceil(dt));
         const sub = dt / n;
         let collided = false;
@@ -411,6 +421,12 @@ export default function TigerRunnerGame() {
       ctx.textAlign = "left";
       ctx.fillStyle = "rgba(255,255,255,0.85)";
       ctx.fillText(`LV ${s.level + 1}`, 16, 14);
+      if (globalTopRef.current > 0) {
+        ctx.font = "bold 16px monospace";
+        ctx.fillStyle = "#F2C14E";
+        ctx.fillText(`TOP ${globalTopRef.current}`, 16, 40);
+        ctx.font = "bold 20px monospace";
+      }
       ctx.textAlign = "right";
       ctx.fillStyle = "rgba(255,255,255,0.9)";
       ctx.fillText(`SCORE ${s.cleared}`, WORLD_W - 16, 14);
@@ -438,6 +454,10 @@ export default function TigerRunnerGame() {
       lastTimeRef.current = null;
     };
   }, [nextHistoryEntry, spawnBurst, spawnDust]);
+
+  const handleTopScore = useCallback((score: number) => {
+    globalTopRef.current = score;
+  }, []);
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
@@ -524,6 +544,8 @@ export default function TigerRunnerGame() {
         스페이스바·↑ 또는 화면 터치로 점프 · 장애물 {OBSTACLES_PER_HISTORY}개를
         넘으면 경영대학의 역사가 열립니다 · 넘을수록 점점 빨라져요
       </p>
+
+      <GameLeaderboard run={run} onTopScore={handleTopScore} />
 
       {phase === "history" && historyEntry && (
         <Portal>

@@ -17,7 +17,10 @@ export const GRAVITY = 0.85;
 export const JUMP_VELOCITY = -14;
 export const BASE_SPEED = 4.4;
 export const SPEED_STEP = 0.4;
-export const MAX_SPEED = 10.5;
+export const MAX_SPEED = 13.2;
+/** 이 레벨까지는 SPEED_STEP씩, 그 이후에는 LATE_SPEED_STEP씩 빨라져 레벨 20 근처에서 최고 속도에 닿습니다 */
+const EARLY_LEVELS = 10;
+const LATE_SPEED_STEP = 0.48;
 export const OBSTACLES_PER_SPEEDUP = 5;
 export const OBSTACLES_PER_HISTORY = 10;
 
@@ -58,7 +61,9 @@ export interface StepEvents {
 }
 
 export function targetSpeed(level: number): number {
-  return Math.min(MAX_SPEED, BASE_SPEED + level * SPEED_STEP);
+  const early = Math.min(level, EARLY_LEVELS);
+  const late = Math.max(0, level - EARLY_LEVELS);
+  return Math.min(MAX_SPEED, BASE_SPEED + early * SPEED_STEP + late * LATE_SPEED_STEP);
 }
 
 export function createEngine(): EngineState {
