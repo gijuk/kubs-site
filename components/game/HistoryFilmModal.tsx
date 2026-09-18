@@ -25,8 +25,18 @@ export default function HistoryFilmModal({
   onContinue: () => void;
 }) {
   useEffect(() => {
+    // 점프하려고 연타하던 스페이스바로 팝업이 열리자마자 닫히지 않도록 잠깐 입력을 무시합니다.
+    const openedAt = performance.now();
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === "Space" || e.code === "Enter" || e.code === "Escape") {
+      if (e.repeat || performance.now() - openedAt < 600) return;
+      if (
+        e.code === "Space" ||
+        e.code === "Enter" ||
+        e.code === "Escape" ||
+        e.key === " " ||
+        e.key === "Enter" ||
+        e.key === "Escape"
+      ) {
         e.preventDefault();
         onContinue();
       }

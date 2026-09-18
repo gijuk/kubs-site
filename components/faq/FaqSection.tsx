@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { faqItems, FAQ_LAST_VERIFIED } from "@/lib/data/faq";
 import type { FaqCategory } from "@/lib/types";
 import FaqSearchBar from "./FaqSearchBar";
@@ -17,9 +18,13 @@ const CATEGORIES: FaqCategory[] = [
   "학생회",
 ];
 
+// 처음에는 이 개수만 보여주고, "질문 더보기"를 누르면 나머지를 펼칩니다.
+const INITIAL_VISIBLE = 6;
+
 export default function FaqSection() {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<FaqCategory | "전체">("전체");
+  const [expanded, setExpanded] = useState(false);
 
   const filtered = useMemo(() => {
     return faqItems.filter((item) => {
@@ -31,6 +36,20 @@ export default function FaqSection() {
       return matchesCategory && matchesQuery;
     });
   }, [query, category]);
+
+  // 검색 중에는 접어둔 항목에 결과가 숨지 않도록 일치하는 걸 모두 보여줍니다.
+  const isSearching = query.trim().length > 0;
+  const collapsible = !isSearching && filtered.length > INITIAL_VISIBLE;
+  const visible =
+    collapsible && !expanded ? filtered.slice(0, INITIAL_VISIBLE) : filtered;
+
+  const handleCollapse = () => {
+    setExpanded(false);
+    // 긴 목록 맨 아래에서 접으면 화면이 엉뚱한 곳에 남으니, FAQ 맨 위로 되돌립니다.
+    document
+      .getElementById("faq")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   return (
     <section
@@ -69,9 +88,14 @@ export default function FaqSection() {
         </div>
 
         <div className="mt-6">
-          {filtered.length > 0 ? (
-            filtered.map((item, index) => (
-              <FaqAccordionItem key={item.id} item={item} index={index} />
+          {visible.length > 0 ? (
+            visible.map((item, index) => (
+              <FaqAccordionItem
+                key={item.id}
+                item={item}
+                // 더보기로 새로 나타난 항목들이 위에서부터 차례로 등장하도록 순번을 다시 매깁니다.
+                index={expanded ? Math.max(0, index - INITIAL_VISIBLE) : index}
+              />
             ))
           ) : (
             <p className="py-12 text-center text-sm text-ink-faint">
@@ -79,6 +103,28 @@ export default function FaqSection() {
             </p>
           )}
         </div>
+
+        {collapsible && (
+          <div className="mt-6 flex justify-center">
+            {expanded ? (
+              <button
+                onClick={handleCollapse}
+                className="flex items-center gap-1.5 rounded-full border border-ivory-line px-5 py-2.5 text-sm text-ink-soft transition-colors hover:border-crimson hover:text-crimson"
+              >
+                질문 접기
+                <ChevronUp size={15} strokeWidth={1.75} />
+              </button>
+            ) : (
+              <button
+                onClick={() => setExpanded(true)}
+                className="flex items-center gap-1.5 rounded-full border border-crimson px-5 py-2.5 text-sm text-crimson transition-colors hover:bg-crimson hover:text-ivory"
+              >
+                질문 더보기 ({filtered.length - INITIAL_VISIBLE}개 더)
+                <ChevronDown size={15} strokeWidth={1.75} />
+              </button>
+            )}
+          </div>
+        )}
 
         <p className="mt-6 text-xs leading-relaxed text-ink-faint">
           답변은 고려대학교 공식 페이지를 바탕으로 {FAQ_LAST_VERIFIED}에 확인한

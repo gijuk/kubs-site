@@ -105,22 +105,7 @@ export interface ObstacleSpec {
 const OBSTACLE_COLORS = ["#B33A52", "#3F6B4A", "#B08D57"];
 const BIRD_COLOR = "#C9BFE0";
 
-export function randomObstacleSpec(): ObstacleSpec {
-  if (Math.random() < 0.25) {
-    return {
-      kind: "bird",
-      width: 24,
-      height: 14,
-      stalks: 0,
-      color: BIRD_COLOR,
-      // 서 있는 호랑이 머리 바로 위 ~ 등 높이 정도로 낮게 날아서, 점프로 확실히 넘길 수 있게 합니다.
-      flyOffset: 2 + Math.random() * 6,
-      speedMul: 1.35,
-    };
-  }
-
-  const stalks = 1 + Math.floor(Math.random() * 2); // 1~2 (너무 촘촘하지 않도록)
-  const height = 22 + Math.floor(Math.random() * 3) * 6; // 22/28/34
+export function makeGroundSpec(stalks: number, height: number): ObstacleSpec {
   const color = OBSTACLE_COLORS[Math.floor(Math.random() * OBSTACLE_COLORS.length)];
   return {
     kind: "ground",
@@ -131,6 +116,37 @@ export function randomObstacleSpec(): ObstacleSpec {
     flyOffset: 0,
     speedMul: 1,
   };
+}
+
+function makeBirdSpec(): ObstacleSpec {
+  return {
+    kind: "bird",
+    width: 24,
+    height: 14,
+    stalks: 0,
+    color: BIRD_COLOR,
+    // 서 있는 호랑이 머리 바로 위 ~ 등 높이 정도로 낮게 날아서, 점프로 확실히 넘길 수 있게 합니다.
+    flyOffset: 2 + Math.random() * 6,
+    speedMul: 1.35,
+  };
+}
+
+/**
+ * 난이도(level)에 따라 다음 장애물을 고릅니다.
+ * - 새는 level 1(장애물 5개 통과)부터 등장하고 점점 자주 나옵니다.
+ * - 대나무 3줄 묶음은 level 3부터 등장합니다.
+ */
+export function randomObstacleSpec(level = 0): ObstacleSpec {
+  const birdChance = level < 1 ? 0 : Math.min(0.34, 0.12 + 0.03 * level);
+  if (Math.random() < birdChance) return makeBirdSpec();
+
+  const tripleChance = level < 3 ? 0 : Math.min(0.22, 0.06 + 0.02 * (level - 3));
+  const doubleChance = 0.32;
+  const roll = Math.random();
+  const stalks =
+    roll < tripleChance ? 3 : roll < tripleChance + doubleChance ? 2 : 1;
+  const height = 22 + Math.floor(Math.random() * 3) * 6; // 22/28/34
+  return makeGroundSpec(stalks, height);
 }
 
 /**
