@@ -1,15 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { RotateCw, Trophy } from "lucide-react";
 import {
   getLeaderboardAction,
   submitScoreAction,
+  updateNicknameAction,
   type LeaderboardData,
 } from "@/app/game/actions";
-
-const PLAYER_KEY = "kubs-game-player";
-const NICK_KEY = "kubs-game-nick";
+import { loadPlayerId } from "./gamePlayer";
 
 export interface FinishedRun {
   /** 게임 오버마다 바뀌는 값 (같은 기록을 두 번 등록하지 않도록 구분) */
@@ -18,45 +17,31 @@ export interface FinishedRun {
   durationMs: number;
 }
 
-function makeUuid(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  // 아주 오래된 브라우저용 대체 (랭킹 식별용이라 암호학적 강도는 필요 없습니다)
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    return (c === "x" ? r : (r & 3) | 8).toString(16);
-  });
-}
-
-function loadPlayerId(): string {
-  try {
-    const saved = localStorage.getItem(PLAYER_KEY);
-    if (saved) return saved;
-    const fresh = makeUuid();
-    localStorage.setItem(PLAYER_KEY, fresh);
-    return fresh;
-  } catch {
-    return makeUuid();
-  }
-}
-
 export default function GameLeaderboard({
   run,
+  nickname,
+  nicknameChange,
   onTopScore,
+  onAutoResult,
+  onRequestNickname,
 }: {
   run: FinishedRun | null;
+  /** 설정된 닉네임 (없으면 기록이 자동 집계되지 않습니다) */
+  nickname: string;
+  /** 값이 바뀔 때마다 서버의 내 기록 닉네임도 함께 바꿉니다 (닉네임 변경 시각) */
+  nicknameChange: number;
   /** 전체 1위 점수를 게임 화면(HUD)에 알려줍니다 */
   onTopScore: (score: number) => void;
+  /** 이번 판의 자동 등록 결과 안내 문구 (게임 오버 화면에 표시) */
+  onAutoResult: (message: string | null) => void;
+  onRequestNickname: () => void;
 }) {
   const [data, setData] = useState<LeaderboardData | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
-  const [nickname, setNickname] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [submittedRunId, setSubmittedRunId] = useState<number | null>(null);
-  const [pending, startTransition] = useTransition();
   const playerIdRef = useRef<string>("");
+  const autoSubmittedRef = useRef<number | null>(null);
+  const lastNicknameChangeRef = useRef(nicknameChange);
 
   const applyData = useCallback(
     (next: LeaderboardData) => {
@@ -77,58 +62,64 @@ export default function GameLeaderboard({
 
   useEffect(() => {
     playerIdRef.current = loadPlayerId();
-    try {
-      setNickname(localStorage.getItem(NICK_KEY) ?? "");
-    } catch {
-      /* 저장소를 못 쓰면 매번 입력 */
-    }
     load();
   }, [load]);
 
-  // 새 게임을 시작하면(=run이 비워지면) 이전 등록 안내를 지웁니다.
+  // 새 판을 시작하면 이전 안내를 지웁니다.
   useEffect(() => {
     if (run === null) {
-      setMessage(null);
       setError(null);
+      onAutoResult(null);
     }
-  }, [run]);
+  }, [run, onAutoResult]);
+
+  // 닉네임을 바꾸면 이미 등록된 내 기록의 닉네임도 함께 바꿉니다.
+  useEffect(() => {
+    if (nicknameChange === lastNicknameChangeRef.current) return;
+    lastNicknameChangeRef.current = nicknameChange;
+    if (!nickname || !playerIdRef.current) return;
+    updateNicknameAction({ playerId: playerIdRef.current, nickname }).then((result) => {
+      if (result.ok && result.data) applyData(result.data);
+    });
+  }, [nicknameChange, nickname, applyData]);
 
   const myBest = data?.me?.score ?? 0;
-  const canSubmit =
-    run !== null && run.score > 0 && submittedRunId !== run.id && status === "ready";
-  const beatsMyRecord = run !== null && run.score > myBest;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!run || pending) return;
+  // 게임이 끝나면(닉네임이 있을 때) 기록을 자동으로 순위에 등록합니다.
+  useEffect(() => {
+    if (!run || run.score < 1 || !nickname) return;
+    if (autoSubmittedRef.current === run.id) return;
+    if (status === "loading") return; // 내 기록을 불러온 뒤에 비교
+
+    autoSubmittedRef.current = run.id;
     setError(null);
-    setMessage(null);
 
-    startTransition(async () => {
-      const result = await submitScoreAction({
-        playerId: playerIdRef.current,
-        nickname,
-        score: run.score,
-        durationMs: run.durationMs,
-      });
+    if (status === "ready" && run.score <= myBest) {
+      onAutoResult(`내 등록 기록(${myBest}개)을 넘지 못해 기존 기록이 유지돼요.`);
+      return;
+    }
+
+    submitScoreAction({
+      playerId: playerIdRef.current,
+      nickname,
+      score: run.score,
+      durationMs: run.durationMs,
+    }).then((result) => {
       if (!result.ok || !result.data) {
         setError(result.error ?? "기록 등록에 실패했습니다.");
+        onAutoResult(null);
         return;
       }
-      try {
-        localStorage.setItem(NICK_KEY, nickname.trim().slice(0, 12));
-      } catch {
-        /* 무시 */
-      }
-      setSubmittedRunId(run.id);
       applyData(result.data);
-      setMessage(
+      onAutoResult(
         result.improved
-          ? `등록 완료! 현재 ${result.data.me?.rank ?? "-"}위예요.`
-          : "이미 더 높은 기록이 등록되어 있어 기존 기록을 유지했어요."
+          ? `기록 ${run.score}개가 전체 ${result.data.me?.rank ?? "-"}위로 자동 등록됐어요!`
+          : "이미 더 높은 기록이 등록되어 있어 기존 기록이 유지돼요."
       );
     });
-  };
+  }, [run, nickname, status, myBest, applyData, onAutoResult]);
+
+  const showNicknameCta = !nickname;
 
   return (
     <div className="mt-8 w-full max-w-[1100px] rounded-2xl border border-ivory-fixed/15 bg-ivory-fixed/5 p-5 text-left sm:p-6">
@@ -146,16 +137,44 @@ export default function GameLeaderboard({
             aria-label="랭킹 새로고침"
             className="flex items-center gap-1 rounded-full border border-ivory-fixed/20 px-2.5 py-1 transition-colors hover:border-ivory-fixed/50 hover:text-ivory-fixed disabled:opacity-50"
           >
-            <RotateCw size={12} strokeWidth={1.75} className={status === "loading" ? "animate-spin" : ""} />
+            <RotateCw
+              size={12}
+              strokeWidth={1.75}
+              className={status === "loading" ? "animate-spin" : ""}
+            />
             새로고침
           </button>
         </div>
       </div>
 
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-ivory-fixed/5 px-3 py-2 text-sm">
+        {nickname ? (
+          <span className="text-ivory-fixed/80">
+            내 닉네임 <b className="text-ivory-fixed">{nickname}</b>
+            <span className="text-ivory-fixed/50"> · 기록이 자동으로 집계돼요</span>
+          </span>
+        ) : (
+          <span className="text-ivory-fixed/70">
+            닉네임을 설정하면 게임 기록이 자동으로 순위에 집계돼요. (선택)
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={onRequestNickname}
+          className={`rounded-full px-3.5 py-1 text-xs font-medium transition-colors ${
+            showNicknameCta
+              ? "bg-crimson text-ivory-fixed hover:bg-crimson-deep"
+              : "border border-ivory-fixed/25 text-ivory-fixed/80 hover:border-ivory-fixed/60 hover:text-ivory-fixed"
+          }`}
+        >
+          {showNicknameCta ? "닉네임 설정" : "닉네임 변경"}
+        </button>
+      </div>
+
       {data?.me && (
         <p className="mt-3 rounded-lg bg-crimson/15 px-3 py-2 text-sm text-ivory-fixed">
           내 기록 <b>{data.me.score}개</b> · 전체 <b>{data.me.rank}위</b>
-          <span className="text-ivory-fixed/55"> / {data.totalPlayers}명 ({data.me.nickname})</span>
+          <span className="text-ivory-fixed/55"> / {data.totalPlayers}명</span>
         </p>
       )}
 
@@ -202,43 +221,13 @@ export default function GameLeaderboard({
         </ol>
       )}
 
-      {run && run.score > 0 && (
-        <div className="mt-5 border-t border-ivory-fixed/10 pt-5">
-          {canSubmit && beatsMyRecord ? (
-            <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <p className="text-sm text-ivory-fixed sm:flex-1">
-                이번 기록 <b>{run.score}개</b>
-                {myBest > 0 ? ` (내 등록 기록 ${myBest}개를 넘었어요!)` : ""} — 랭킹에 등록할까요?
-              </p>
-              <input
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                maxLength={12}
-                required
-                placeholder="닉네임 (12자 이내)"
-                aria-label="닉네임"
-                className="w-full rounded-full border border-ivory-fixed/25 bg-transparent px-4 py-2 text-sm text-ivory-fixed placeholder:text-ivory-fixed/40 focus:border-crimson-bright focus:outline-none sm:w-48"
-              />
-              <button
-                type="submit"
-                disabled={pending}
-                className="rounded-full bg-crimson px-5 py-2 text-sm font-medium text-ivory-fixed transition-colors hover:bg-crimson-deep disabled:opacity-60"
-              >
-                {pending ? "등록 중..." : "기록 등록"}
-              </button>
-            </form>
-          ) : (
-            !message &&
-            submittedRunId !== run.id && (
-              <p className="text-sm text-ivory-fixed/60">
-                이번 기록 {run.score}개는 내 등록 기록({myBest}개)을 넘지 못해 등록하지 않아요.
-              </p>
-            )
-          )}
-          {message && <p className="text-sm font-medium text-crimson-bright">{message}</p>}
-          {error && <p className="mt-2 text-sm text-red-300">{error}</p>}
-        </div>
+      {run && run.score > 0 && !nickname && (
+        <p className="mt-4 border-t border-ivory-fixed/10 pt-4 text-sm text-ivory-fixed/70">
+          이번 기록 <b className="text-ivory-fixed">{run.score}개</b>는 아직 순위에 등록되지 않았어요.
+          닉네임을 설정하면 이번 기록도 바로 집계돼요.
+        </p>
       )}
+      {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
 
       <p className="mt-4 text-[11px] leading-relaxed text-ivory-fixed/40">
         닉네임과 점수만 저장되며 계정은 필요 없어요. 같은 브라우저에서는 최고 기록 하나만 등록됩니다.

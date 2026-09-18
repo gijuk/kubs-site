@@ -6,6 +6,8 @@ import { drawObstacle, drawTiger } from "./tigerSprites";
 import Portal from "@/components/common/Portal";
 import HistoryFilmModal from "./HistoryFilmModal";
 import GameLeaderboard, { type FinishedRun } from "./GameLeaderboard";
+import NicknameModal, { type NicknameModalMode } from "./NicknameModal";
+import { readNickname, readSkipped, writeNickname, writeSkipped } from "./gamePlayer";
 import { GROUND_Y, TIGER_X, WORLD_H, WORLD_W } from "./gameConstants";
 import {
   FLY_BASE_Y,
@@ -84,6 +86,10 @@ export default function TigerRunnerGame() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [speedFlash, setSpeedFlash] = useState<number | null>(null);
   const [run, setRun] = useState<FinishedRun | null>(null);
+  const [nickname, setNickname] = useState("");
+  const [nicknameChange, setNicknameChange] = useState(0);
+  const [nickModal, setNickModal] = useState<NicknameModalMode | null>(null);
+  const [autoResult, setAutoResult] = useState<string | null>(null);
 
   const phaseRef = useRef<Phase>("idle");
   const engineRef = useRef<EngineState>(createEngine());
@@ -91,6 +97,9 @@ export default function TigerRunnerGame() {
   const globalTopRef = useRef(0);
   const playMsRef = useRef(0);
   const runIdRef = useRef(0);
+  const nicknameRef = useRef("");
+  const nickModalRef = useRef<NicknameModalMode | null>(null);
+  const skippedRef = useRef(false);
   const visibleRatioRef = useRef(0);
   const jumpBufferRef = useRef(0);
   const particlesRef = useRef<Particle[]>([]);
@@ -112,6 +121,15 @@ export default function TigerRunnerGame() {
     const saved = readBest();
     bestRef.current = saved;
     setBest(saved);
+    const nick = readNickname();
+    nicknameRef.current = nick;
+    setNickname(nick);
+    skippedRef.current = readSkipped();
+  }, []);
+
+  const openNickModal = useCallback((mode: NicknameModalMode | null) => {
+    nickModalRef.current = mode;
+    setNickModal(mode);
   }, []);
 
   const nextHistoryEntry = useCallback((): KubsHistoryEntry => {
@@ -165,6 +183,7 @@ export default function TigerRunnerGame() {
     setNewBest(false);
     setSpeedFlash(null);
     setRun(null);
+    setAutoResult(null);
     playMsRef.current = 0;
     setPhaseBoth("playing");
   }, []);
@@ -196,8 +215,11 @@ export default function TigerRunnerGame() {
 
   const handlePrimaryAction = useCallback(() => {
     const p = phaseRef.current;
+    if (nickModalRef.current) return; // 닉네임 창이 열려 있는 동안은 게임 입력을 받지 않습니다.
     if (p === "idle") {
-      startGame();
+      // 처음 시작할 때 한 번, 닉네임을 설정할지 묻습니다. (선택사항)
+      if (!nicknameRef.current && !skippedRef.current) openNickModal("start");
+      else startGame();
     } else if (p === "playing") {
       const s = engineRef.current;
       if (isGrounded(s)) {
@@ -213,7 +235,7 @@ export default function TigerRunnerGame() {
       beginCountdown();
     }
     // history 단계는 HistoryFilmModal이 입력을 처리합니다.
-  }, [startGame, beginCountdown, spawnDust]);
+  }, [startGame, beginCountdown, spawnDust, openNickModal]);
 
   // 키보드: 게임 화면이 보일 때만, 입력창/버튼 등에서는 절대 가로채지 않습니다.
   useEffect(() => {
@@ -236,6 +258,7 @@ export default function TigerRunnerGame() {
         return;
       }
       const p = phaseRef.current;
+      if (nickModalRef.current) return;
       if (p === "history") return; // 역사 팝업이 직접 처리(스크롤 방지 포함)
       const needed = p === "idle" || p === "gameover" ? KEY_VISIBLE_RATIO : AUTO_PAUSE_RATIO;
       if (visibleRatioRef.current < needed) return;
@@ -458,6 +481,27 @@ export default function TigerRunnerGame() {
     };
   }, [nextHistoryEntry, spawnBurst, spawnDust]);
 
+  const handleNicknameSave = useCallback(
+    (nick: string) => {
+      const mode = nickModalRef.current;
+      const changed = nick !== nicknameRef.current;
+      writeNickname(nick);
+      nicknameRef.current = nick;
+      setNickname(nick);
+      if (changed) setNicknameChange((n) => n + 1);
+      openNickModal(null);
+      if (mode === "start" && phaseRef.current === "idle") startGame();
+    },
+    [openNickModal, startGame]
+  );
+
+  const handleNicknameSkip = useCallback(() => {
+    writeSkipped();
+    skippedRef.current = true;
+    openNickModal(null);
+    if (phaseRef.current === "idle") startGame();
+  }, [openNickModal, startGame]);
+
   const handleTopScore = useCallback((score: number) => {
     globalTopRef.current = score;
   }, []);
@@ -536,6 +580,14 @@ export default function TigerRunnerGame() {
               장애물 {finalScore}개 통과 · LV {finalLevel + 1} · 역사 {historySeenCount}개 확인
             </p>
             <p className="text-xs text-ivory-fixed/50">최고 기록 {best}개</p>
+            {autoResult && (
+              <p className="text-sm font-medium text-crimson-bright">{autoResult}</p>
+            )}
+            {!nickname && finalScore > 0 && (
+              <p className="text-xs text-ivory-fixed/50">
+                닉네임을 설정하면 기록이 순위에 자동 집계돼요 (아래 랭킹 패널)
+              </p>
+            )}
             <p className="mt-2 rounded-full bg-crimson px-5 py-2 text-sm font-medium text-ivory-fixed">
               스페이스바 · 화면 터치로 다시 시작
             </p>
@@ -548,7 +600,24 @@ export default function TigerRunnerGame() {
         넘으면 경영대학의 역사가 열립니다 · 넘을수록 점점 빨라져요
       </p>
 
-      <GameLeaderboard run={run} onTopScore={handleTopScore} />
+      <GameLeaderboard
+        run={run}
+        nickname={nickname}
+        nicknameChange={nicknameChange}
+        onTopScore={handleTopScore}
+        onAutoResult={setAutoResult}
+        onRequestNickname={() => openNickModal("edit")}
+      />
+
+      {nickModal && (
+        <NicknameModal
+          mode={nickModal}
+          initial={nickname}
+          onSave={handleNicknameSave}
+          onSkip={handleNicknameSkip}
+          onClose={() => openNickModal(null)}
+        />
+      )}
 
       {phase === "history" && historyEntry && (
         <Portal>
