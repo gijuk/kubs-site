@@ -226,7 +226,7 @@ export default function TigerRunnerGame() {
         e.key === "ArrowUp" ||
         e.key === "Enter";
       if (!isActionKey) return;
-      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
       const target = e.target as HTMLElement | null;
       if (
         target?.closest(
@@ -235,10 +235,13 @@ export default function TigerRunnerGame() {
       ) {
         return;
       }
-      if (phaseRef.current === "history") return;
-      const needed = phaseRef.current === "playing" ? AUTO_PAUSE_RATIO : KEY_VISIBLE_RATIO;
+      const p = phaseRef.current;
+      if (p === "history") return; // 역사 팝업이 직접 처리(스크롤 방지 포함)
+      const needed = p === "idle" || p === "gameover" ? KEY_VISIBLE_RATIO : AUTO_PAUSE_RATIO;
       if (visibleRatioRef.current < needed) return;
+      // 카운트다운 중이거나 키를 꾹 누르고 있을 때도 페이지가 스크롤되지 않게 항상 막습니다.
       e.preventDefault();
+      if (e.repeat) return;
       handlePrimaryAction();
     };
     window.addEventListener("keydown", onKeyDown);

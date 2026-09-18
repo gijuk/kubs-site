@@ -28,18 +28,18 @@ export default function HistoryFilmModal({
     // 점프하려고 연타하던 스페이스바로 팝업이 열리자마자 닫히지 않도록 잠깐 입력을 무시합니다.
     const openedAt = performance.now();
     const onKey = (e: KeyboardEvent) => {
-      if (e.repeat || performance.now() - openedAt < 600) return;
-      if (
+      const isActionKey =
         e.code === "Space" ||
         e.code === "Enter" ||
         e.code === "Escape" ||
         e.key === " " ||
         e.key === "Enter" ||
-        e.key === "Escape"
-      ) {
-        e.preventDefault();
-        onContinue();
-      }
+        e.key === "Escape";
+      if (!isActionKey) return;
+      // 무시하는 구간(연타·키 반복)에서도 스페이스바의 기본 동작(페이지 스크롤)은 항상 막습니다.
+      e.preventDefault();
+      if (e.repeat || performance.now() - openedAt < 600) return;
+      onContinue();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
