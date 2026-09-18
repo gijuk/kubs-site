@@ -22,8 +22,8 @@ export default function ShooterGameSection() {
             KUBS Tiger Shooter
           </h2>
           <p className="max-w-[46ch] text-sm leading-relaxed text-ink-soft">
-            자동으로 달리고 쏘는 호랑이를 좌우로 움직여 몰려오는 몬스터를 물리쳐 보세요.
-            처치할수록 레벨이 오르고 총알이 늘어납니다.
+            호랑이 분대를 좌우로 움직여 몰려오는 몬스터 무리를 물리쳐 보세요.
+            +N 장벽을 지나면 병력이 늘고, -N 장벽을 지나면 줄어듭니다.
           </p>
         </div>
 

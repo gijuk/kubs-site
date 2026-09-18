@@ -3,9 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   MAX_LEVEL,
-  PLAYER_MAX_X,
   STAGE_LENGTH,
-  bulletsForLevel,
   createState,
   expToNext,
   startGame,
@@ -17,6 +15,8 @@ import type { ShooterRenderer } from "./shooterRenderer";
 const BEST_KEY = "kubs-shooter-best";
 /** 화면 가로 전체를 드래그했을 때 플레이어가 움직이는 월드 거리 (도로 폭보다 살짝 크게) */
 const DRAG_WORLD_WIDTH = 13;
+/** 드래그 목표의 바깥 한계 (엔진이 분대 폭만큼 다시 안쪽으로 조정합니다) */
+const DRAG_LIMIT = 3.9;
 const KEY_VISIBLE_RATIO = 0.5;
 const AUTO_PAUSE_RATIO = 0.15;
 const TARGET_INTERACTIVE = "input, textarea, select, button, a, summary, [contenteditable], [role='dialog']";
@@ -28,11 +28,11 @@ interface Hud {
   kills: number;
   expRatio: number;
   progress: number;
-  bullets: number;
+  squad: number;
   boss: boolean;
 }
 
-const INITIAL_HUD: Hud = { level: 1, kills: 0, expRatio: 0, progress: 0, bullets: 1, boss: false };
+const INITIAL_HUD: Hud = { level: 1, kills: 0, expRatio: 0, progress: 0, squad: 3, boss: false };
 
 function readBest(): number {
   try {
@@ -57,7 +57,7 @@ export default function ShooterGame() {
 
   const [phase, setPhase] = useState<UiPhase>("ready");
   const [hud, setHud] = useState<Hud>(INITIAL_HUD);
-  const [levelUp, setLevelUp] = useState<{ key: number; level: number; bullets: number } | null>(null);
+  const [levelUp, setLevelUp] = useState<{ key: number; level: number; squad: number } | null>(null);
   const [best, setBest] = useState(0);
   const [newBest, setNewBest] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
@@ -165,7 +165,7 @@ export default function ShooterGame() {
           kills: s.kills,
           expRatio: s.level >= MAX_LEVEL ? 1 : s.exp / expToNext(s.level),
           progress: Math.min(1, s.distance / STAGE_LENGTH),
-          bullets: bulletsForLevel(s.level),
+          squad: s.squad,
           boss: s.bossSpawned,
         };
         const prev = hudRef.current;
@@ -173,6 +173,7 @@ export default function ShooterGame() {
           h.level !== prev.level ||
           h.kills !== prev.kills ||
           h.boss !== prev.boss ||
+          h.squad !== prev.squad ||
           Math.abs(h.expRatio - prev.expRatio) > 0.005 ||
           Math.abs(h.progress - prev.progress) > 0.005
         ) {
@@ -183,7 +184,7 @@ export default function ShooterGame() {
         for (const ev of s.events) {
           if (ev.type === "levelUp") {
             levelUpKeyRef.current += 1;
-            setLevelUp({ key: levelUpKeyRef.current, level: ev.level, bullets: ev.bullets });
+            setLevelUp({ key: levelUpKeyRef.current, level: ev.level, squad: ev.squad });
             clearTimeout(levelUpTimeoutRef.current);
             levelUpTimeoutRef.current = setTimeout(() => setLevelUp(null), 1300);
           } else if (ev.type === "gameOver" || ev.type === "stageClear") {
@@ -338,7 +339,7 @@ export default function ShooterGame() {
     if (!drag || drag.pointerId !== e.pointerId) return;
     const width = e.currentTarget.getBoundingClientRect().width || 1;
     const target = drag.startPlayerX + ((e.clientX - drag.startX) / width) * DRAG_WORLD_WIDTH;
-    stateRef.current.input.dragTargetX = Math.max(-PLAYER_MAX_X, Math.min(PLAYER_MAX_X, target));
+    stateRef.current.input.dragTargetX = Math.max(-DRAG_LIMIT, Math.min(DRAG_LIMIT, target));
   };
 
   const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -395,7 +396,7 @@ export default function ShooterGame() {
                 className="mt-1 whitespace-nowrap font-extrabold text-white drop-shadow"
                 style={{ fontSize: "clamp(8px, 3.2cqw, 14px)" }}
               >
-                총알 {hud.bullets}발
+                병력 {hud.squad}명
               </p>
             </div>
 
@@ -439,7 +440,7 @@ export default function ShooterGame() {
               className="mt-2 rounded-full bg-white/95 px-4 py-1 text-sm font-black text-slate-700 shadow"
               style={{ animation: "shooter-levelup 1.3s ease-out forwards" }}
             >
-              LEVEL {levelUp.level} · 총알 {levelUp.bullets}발
+              LEVEL {levelUp.level} · 병력 +1 (총 {levelUp.squad}명)
             </p>
           </div>
         )}
@@ -465,7 +466,8 @@ export default function ShooterGame() {
             </button>
             <ul className="mt-6 space-y-1 text-center text-xs font-bold text-white drop-shadow sm:text-sm">
               <li>← → / A D 또는 화면 드래그로 좌우 이동</li>
-              <li>총은 자동 발사! 적을 잡고 레벨업하세요</li>
+              <li>파란 장벽(+N)은 먹고, 빨간 장벽(-N)은 피하세요</li>
+              <li>병력이 모두 쓰러지면 게임 오버!</li>
             </ul>
             {best > 0 && (
               <p className="mt-4 rounded-full bg-white/90 px-4 py-1 text-xs font-black text-slate-700">
@@ -521,7 +523,7 @@ export default function ShooterGame() {
       </div>
 
       <p className="mt-3 text-center text-xs text-ink-faint">
-        ← → / A D 또는 화면 드래그로 좌우 이동 · 총은 자동 발사 · 적이 아래까지 오면 게임 오버
+        ← → / A D 또는 화면 드래그로 좌우 이동 · 병력이 각자 자동 발사 · 장벽 숫자로 병력을 늘리세요
       </p>
     </div>
   );
