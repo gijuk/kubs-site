@@ -30,13 +30,26 @@ export interface AdminPhoto extends Photo {
   submitterInfo?: string;
 }
 
-export type FaqCategory = "학사" | "장학/등록" | "학생회" | "시설" | "교환/유학";
+export type FaqCategory =
+  | "전공"
+  | "학사"
+  | "장학/등록"
+  | "교환/유학"
+  | "시설"
+  | "학생회";
+
+export interface FaqSource {
+  label: string;
+  url: string;
+}
 
 export interface FaqItem {
   id: string;
   category: FaqCategory;
   question: string;
+  /** 줄바꿈("\n")이 그대로 표시됩니다. */
   answer: string;
+  source?: FaqSource;
 }
 
 export const CATEGORY_LABEL: Record<ScheduleCategory, string> = {

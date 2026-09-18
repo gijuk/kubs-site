@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { ExternalLink, Plus } from "lucide-react";
 import type { FaqItem } from "@/lib/types";
 
 export default function FaqAccordionItem({
@@ -46,9 +46,20 @@ export default function FaqAccordionItem({
         }`}
       >
         <div className="min-h-0">
-          <p className="max-w-[62ch] text-sm leading-relaxed text-ink-soft">
+          <p className="max-w-[62ch] whitespace-pre-line text-sm leading-relaxed text-ink-soft">
             {item.answer}
           </p>
+          {item.source && (
+            <a
+              href={item.source.url}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 inline-flex items-center gap-1 text-xs text-ink-faint transition-colors hover:text-crimson"
+            >
+              출처: {item.source.label}
+              <ExternalLink size={11} strokeWidth={1.75} />
+            </a>
+          )}
         </div>
       </div>
     </div>

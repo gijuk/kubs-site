@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { faqItems } from "@/lib/mock-data";
+import { faqItems, FAQ_LAST_VERIFIED } from "@/lib/data/faq";
 import type { FaqCategory } from "@/lib/types";
 import FaqSearchBar from "./FaqSearchBar";
 import FaqCategoryFilter from "./FaqCategoryFilter";
@@ -9,11 +9,12 @@ import FaqAccordionItem from "./FaqAccordionItem";
 import GlassShape from "@/components/common/GlassShape";
 
 const CATEGORIES: FaqCategory[] = [
+  "전공",
   "학사",
   "장학/등록",
-  "학생회",
-  "시설",
   "교환/유학",
+  "시설",
+  "학생회",
 ];
 
 export default function FaqSection() {
@@ -78,6 +79,12 @@ export default function FaqSection() {
             </p>
           )}
         </div>
+
+        <p className="mt-6 text-xs leading-relaxed text-ink-faint">
+          답변은 고려대학교 공식 페이지를 바탕으로 {FAQ_LAST_VERIFIED}에 확인한
+          내용이에요. 제도와 일정은 학기마다 바뀔 수 있으니, 중요한 사항은
+          각 답변의 출처와 포털 공지에서 최종 확인해주세요.
+        </p>
       </div>
     </section>
   );
