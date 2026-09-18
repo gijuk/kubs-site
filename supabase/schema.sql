@@ -128,6 +128,28 @@ values ('promotions', 'promotions', true)
 on conflict (id) do nothing;
 
 -- ============================================================
+-- 업로더 연락처/신상 (선택 입력, 관리자 전용)
+-- 사진 업로드·홍보 게시판에서 업로더가 선택적으로 남기는 전화번호와 신상 정보입니다.
+-- photos/promotions 는 승인된 행이 anon 에게 select 로 공개되므로 같은 테이블에
+-- 컬럼을 추가하면 개인정보가 노출될 수 있어, 정책이 전혀 없는(=관리자만 접근하는)
+-- 별도 테이블에 저장합니다. 원본 행이 삭제되면 함께 삭제됩니다.
+-- ============================================================
+
+create table if not exists photo_submitters (
+  photo_id uuid primary key references photos(id) on delete cascade,
+  phone text,
+  info text
+);
+alter table photo_submitters enable row level security;
+
+create table if not exists promotion_submitters (
+  promotion_id uuid primary key references promotions(id) on delete cascade,
+  phone text,
+  info text
+);
+alter table promotion_submitters enable row level security;
+
+-- ============================================================
 -- 익명 건의함: suggestions 테이블
 -- 누구나 익명으로 학생회에 의견을 보낼 수 있고, 관리자만 열람합니다.
 -- 사이트에 공개적으로 노출되는 게시판이 아니므로 승인 절차가 없습니다.

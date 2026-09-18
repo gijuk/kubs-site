@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Promotion } from "@/lib/types";
 import PromotionCard from "./PromotionCard";
+import Portal from "@/components/common/Portal";
 import PromotionDetailModal from "./PromotionDetailModal";
 
 export default function PromotionList({
@@ -34,10 +35,12 @@ export default function PromotionList({
       </div>
 
       {selected && (
-        <PromotionDetailModal
-          promotion={selected}
-          onClose={() => setSelected(null)}
-        />
+        <Portal>
+          <PromotionDetailModal
+            promotion={selected}
+            onClose={() => setSelected(null)}
+          />
+        </Portal>
       )}
     </>
   );

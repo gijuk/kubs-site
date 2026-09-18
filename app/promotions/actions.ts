@@ -3,6 +3,7 @@
 import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { getAdminSupabaseClient } from "@/lib/supabase/adminClient";
+import { readSubmitterInfo } from "@/lib/submitterInfo";
 import type { PromotionCategory } from "@/lib/types";
 
 export interface PromotionUploadState {
@@ -47,6 +48,7 @@ export async function uploadPromotionAction(
     if (link && !/^https?:\/\//.test(link)) {
       throw new Error("링크는 http:// 또는 https:// 로 시작해야 합니다.");
     }
+    const submitter = readSubmitterInfo(formData);
 
     const supabase = getAdminSupabaseClient();
 
@@ -79,16 +81,39 @@ export async function uploadPromotionAction(
       storagePath = path;
     }
 
-    const { error: insertError } = await supabase.from("promotions").insert({
-      category,
-      title,
-      content,
-      author,
-      link: link || null,
-      image_src: imageSrc,
-      storage_path: storagePath,
-    });
+    const { data: inserted, error: insertError } = await supabase
+      .from("promotions")
+      .insert({
+        category,
+        title,
+        content,
+        author,
+        link: link || null,
+        image_src: imageSrc,
+        storage_path: storagePath,
+      })
+      .select("id")
+      .single();
     if (insertError) throw new Error(insertError.message);
+
+    // 선택 입력된 연락처/신상은 공개되지 않는 별도 테이블에 저장합니다.
+    // 저장에 실패하면 방금 만든 게시물/이미지를 되돌려서, 정보가 조용히 사라지지 않게 합니다.
+    if (submitter.phone || submitter.info) {
+      const { error: submitterError } = await supabase
+        .from("promotion_submitters")
+        .insert({
+          promotion_id: inserted.id,
+          phone: submitter.phone,
+          info: submitter.info,
+        });
+      if (submitterError) {
+        await supabase.from("promotions").delete().eq("id", inserted.id);
+        if (storagePath) {
+          await supabase.storage.from(BUCKET).remove([storagePath]);
+        }
+        throw new Error(submitterError.message);
+      }
+    }
 
     refreshPromotionCaches();
     return { success: true };

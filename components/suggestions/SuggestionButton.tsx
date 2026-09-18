@@ -1,30 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { MessageSquareText } from "lucide-react";
+import Portal from "@/components/common/Portal";
 import SuggestionModal from "./SuggestionModal";
 
-export default function SuggestionButton({
-  className,
-  children,
-}: {
-  className?: string;
-  children?: React.ReactNode;
-}) {
+export default function SuggestionButton({ className }: { className?: string }) {
   const [open, setOpen] = useState(false);
 
   return (
     <>
       <button onClick={() => setOpen(true)} className={className}>
-        {children ?? (
-          <>
-            <MessageSquareText size={15} strokeWidth={1.75} />
-            건의함
-          </>
-        )}
+        건의함
       </button>
 
-      {open && <SuggestionModal onClose={() => setOpen(false)} />}
+      {open && (
+        <Portal>
+          <SuggestionModal onClose={() => setOpen(false)} />
+        </Portal>
+      )}
     </>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Upload } from "lucide-react";
+import Portal from "@/components/common/Portal";
 import PhotoUploadModal from "./PhotoUploadModal";
 
 export default function PhotoUploadButton({
@@ -18,7 +19,11 @@ export default function PhotoUploadButton({
         사진 업로드
       </button>
 
-      {open && <PhotoUploadModal onClose={() => setOpen(false)} />}
+      {open && (
+        <Portal>
+          <PhotoUploadModal onClose={() => setOpen(false)} />
+        </Portal>
+      )}
     </>
   );
 }

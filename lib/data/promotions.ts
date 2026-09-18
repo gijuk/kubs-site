@@ -33,11 +33,22 @@ function rowToPromotion(row: PromotionRow): Promotion {
   };
 }
 
-function rowToAdminPromotion(row: PromotionRow): AdminPromotion {
+interface SubmitterRow {
+  promotion_id: string;
+  phone: string | null;
+  info: string | null;
+}
+
+function rowToAdminPromotion(
+  row: PromotionRow,
+  submitter?: SubmitterRow
+): AdminPromotion {
   return {
     ...rowToPromotion(row),
     status: row.status,
     storagePath: row.storage_path,
+    submitterPhone: submitter?.phone ?? undefined,
+    submitterInfo: submitter?.info ?? undefined,
   };
 }
 
@@ -80,7 +91,24 @@ export async function getAllPromotionsForAdmin(): Promise<AdminPromotion[]> {
     return [];
   }
 
-  const rows = (data as PromotionRow[]).map(rowToAdminPromotion);
+  // 선택 입력된 연락처/신상은 별도 테이블에 있습니다. 아직 테이블이 없거나 조회가
+  // 실패해도 목록 자체는 보이도록, 실패하면 연락처만 비워둡니다.
+  const { data: submitters, error: submittersError } = await supabase
+    .from("promotion_submitters")
+    .select("promotion_id, phone, info");
+  if (submittersError) {
+    console.error(
+      "[getAllPromotionsForAdmin] 업로더 정보 조회 실패:",
+      submittersError.message
+    );
+  }
+  const submitterById = new Map(
+    ((submitters ?? []) as SubmitterRow[]).map((s) => [s.promotion_id, s])
+  );
+
+  const rows = (data as PromotionRow[]).map((row) =>
+    rowToAdminPromotion(row, submitterById.get(row.id))
+  );
   return rows.sort((a, b) => {
     if (a.status === b.status) return 0;
     return a.status === "pending" ? -1 : 1;

@@ -25,11 +25,19 @@ function rowToPhoto(row: PhotoRow): Photo {
   };
 }
 
-function rowToAdminPhoto(row: PhotoRow): AdminPhoto {
+interface SubmitterRow {
+  photo_id: string;
+  phone: string | null;
+  info: string | null;
+}
+
+function rowToAdminPhoto(row: PhotoRow, submitter?: SubmitterRow): AdminPhoto {
   return {
     ...rowToPhoto(row),
     status: row.status,
     storagePath: row.storage_path,
+    submitterPhone: submitter?.phone ?? undefined,
+    submitterInfo: submitter?.info ?? undefined,
   };
 }
 
@@ -75,9 +83,23 @@ export async function getAllPhotosForAdmin(): Promise<AdminPhoto[]> {
     return [];
   }
 
+  // 선택 입력된 연락처/신상은 별도 테이블에 있습니다. 아직 테이블이 없거나 조회가
+  // 실패해도 사진 목록 자체는 보이도록, 실패하면 연락처만 비워둡니다.
+  const { data: submitters, error: submittersError } = await supabase
+    .from("photo_submitters")
+    .select("photo_id, phone, info");
+  if (submittersError) {
+    console.error("[getAllPhotosForAdmin] 업로더 정보 조회 실패:", submittersError.message);
+  }
+  const submitterById = new Map(
+    ((submitters ?? []) as SubmitterRow[]).map((s) => [s.photo_id, s])
+  );
+
   // 안정 정렬(stable sort)을 이용해 created_at desc 순서는 유지한 채
   // 승인 대기(pending) 항목만 앞으로 끌어올립니다.
-  const rows = (data as PhotoRow[]).map(rowToAdminPhoto);
+  const rows = (data as PhotoRow[]).map((row) =>
+    rowToAdminPhoto(row, submitterById.get(row.id))
+  );
   return rows.sort((a, b) => {
     if (a.status === b.status) return 0;
     return a.status === "pending" ? -1 : 1;

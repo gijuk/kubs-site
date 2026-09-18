@@ -5,6 +5,7 @@ import { useFormState, useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, CheckCircle2, X } from "lucide-react";
 import { uploadPhotoAction, type PhotoUploadState } from "@/app/archive/actions";
+import SubmitterFields from "@/components/common/SubmitterFields";
 
 const initialState: PhotoUploadState = {};
 
@@ -85,7 +86,7 @@ export default function PhotoUploadModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md animate-fade-up rounded-t-2xl bg-ivory p-8 shadow-xl md:rounded-2xl"
+        className="max-h-[90vh] w-full max-w-md animate-fade-up overflow-y-auto rounded-t-2xl bg-ivory p-8 shadow-xl md:rounded-2xl"
       >
         {justUploaded ? (
           <div className="flex flex-col items-center py-6 text-center">
@@ -174,6 +175,8 @@ export default function PhotoUploadModal({
                   className="w-full rounded-md border border-ivory-line bg-ivory px-3 py-2 text-sm focus:border-crimson focus:outline-none"
                 />
               </div>
+
+              <SubmitterFields />
 
               {state.error && (
                 <p className="text-xs text-crimson">{state.error}</p>

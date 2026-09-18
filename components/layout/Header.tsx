@@ -59,11 +59,11 @@ export default function Header() {
           >
             관리자
           </a>
-          <ThemeToggle className="h-8 w-8" />
+          <ThemeToggle />
         </nav>
 
         <div className="flex items-center gap-3 md:hidden">
-          <ThemeToggle className="h-8 w-8" />
+          <ThemeToggle />
           <button
             className="text-ink"
             onClick={() => setOpen((v) => !v)}

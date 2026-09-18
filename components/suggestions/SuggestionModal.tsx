@@ -46,7 +46,7 @@ export default function SuggestionModal({ onClose }: { onClose: () => void }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md animate-fade-up rounded-t-2xl bg-ivory p-8 shadow-xl md:rounded-2xl"
+        className="max-h-[90vh] w-full max-w-md animate-fade-up overflow-y-auto rounded-t-2xl bg-ivory p-8 shadow-xl md:rounded-2xl"
       >
         {state.success ? (
           <div className="flex flex-col items-center py-6 text-center">

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ScheduleItem } from "@/lib/types";
 import ScheduleCard from "./ScheduleCard";
+import Portal from "@/components/common/Portal";
 import ScheduleModal from "./ScheduleModal";
 
 export default function ScheduleList({ items }: { items: ScheduleItem[] }) {
@@ -30,7 +31,9 @@ export default function ScheduleList({ items }: { items: ScheduleItem[] }) {
       </div>
 
       {selected && (
-        <ScheduleModal item={selected} onClose={() => setSelected(null)} />
+        <Portal>
+          <ScheduleModal item={selected} onClose={() => setSelected(null)} />
+        </Portal>
       )}
     </>
   );

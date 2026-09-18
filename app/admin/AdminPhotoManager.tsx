@@ -51,6 +51,13 @@ function PhotoRow({ photo }: { photo: AdminPhoto }) {
           {photo.eventName}
         </p>
         <p className="truncate text-xs text-ink-faint">{photo.photographer}</p>
+        {(photo.submitterPhone || photo.submitterInfo) && (
+          <p className="mt-0.5 text-xs text-ink-faint">
+            {photo.submitterPhone && <>전화 {photo.submitterPhone}</>}
+            {photo.submitterPhone && photo.submitterInfo && " · "}
+            {photo.submitterInfo && <>신상 {photo.submitterInfo}</>}
+          </p>
+        )}
       </div>
 
       <div className="flex shrink-0 items-center gap-2">

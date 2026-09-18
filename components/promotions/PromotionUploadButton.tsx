@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Megaphone } from "lucide-react";
+import Portal from "@/components/common/Portal";
 import PromotionUploadModal from "./PromotionUploadModal";
 
 export default function PromotionUploadButton({
@@ -18,7 +19,11 @@ export default function PromotionUploadButton({
         홍보물 등록
       </button>
 
-      {open && <PromotionUploadModal onClose={() => setOpen(false)} />}
+      {open && (
+        <Portal>
+          <PromotionUploadModal onClose={() => setOpen(false)} />
+        </Portal>
+      )}
     </>
   );
 }

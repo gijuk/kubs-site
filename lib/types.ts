@@ -25,6 +25,9 @@ export type PhotoStatus = "pending" | "approved";
 export interface AdminPhoto extends Photo {
   status: PhotoStatus;
   storagePath: string | null;
+  /** 업로더가 선택 입력한 연락처/신상 (관리자에게만 보임) */
+  submitterPhone?: string;
+  submitterInfo?: string;
 }
 
 export type FaqCategory = "학사" | "장학/등록" | "학생회" | "시설" | "교환/유학";
@@ -60,6 +63,9 @@ export type PromotionStatus = "pending" | "approved";
 export interface AdminPromotion extends Promotion {
   status: PromotionStatus;
   storagePath: string | null;
+  /** 업로더가 선택 입력한 연락처/신상 (관리자에게만 보임) */
+  submitterPhone?: string;
+  submitterInfo?: string;
 }
 
 export const PROMOTION_CATEGORY_LABEL: Record<PromotionCategory, string> = {

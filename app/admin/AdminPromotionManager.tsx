@@ -60,6 +60,13 @@ function PromotionRow({ promotion }: { promotion: AdminPromotion }) {
           {promotion.title}
         </p>
         <p className="truncate text-xs text-ink-faint">{promotion.author}</p>
+        {(promotion.submitterPhone || promotion.submitterInfo) && (
+          <p className="mt-0.5 text-xs text-ink-faint">
+            {promotion.submitterPhone && <>전화 {promotion.submitterPhone}</>}
+            {promotion.submitterPhone && promotion.submitterInfo && " · "}
+            {promotion.submitterInfo && <>신상 {promotion.submitterInfo}</>}
+          </p>
+        )}
       </div>
 
       <div className="flex shrink-0 items-center gap-2">

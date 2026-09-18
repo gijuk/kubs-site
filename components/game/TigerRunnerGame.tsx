@@ -11,6 +11,7 @@ import {
   randomObstacleSpec,
   type ObstacleSpec,
 } from "./tigerSprites";
+import Portal from "@/components/common/Portal";
 import HistoryFilmModal from "./HistoryFilmModal";
 
 const CANVAS_W = 640;
@@ -386,7 +387,9 @@ export default function TigerRunnerGame() {
       </p>
 
       {phase === "history" && historyEntry && (
-        <HistoryFilmModal entry={historyEntry} onContinue={resumeAfterHistory} />
+        <Portal>
+          <HistoryFilmModal entry={historyEntry} onContinue={resumeAfterHistory} />
+        </Portal>
       )}
     </div>
   );

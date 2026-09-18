@@ -33,7 +33,7 @@ export default function ScheduleModal({ item, onClose }: ScheduleModalProps) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg animate-fade-up rounded-t-2xl bg-ivory p-8 shadow-xl md:rounded-2xl"
+        className="max-h-[90vh] w-full max-w-lg animate-fade-up overflow-y-auto rounded-t-2xl bg-ivory p-8 shadow-xl md:rounded-2xl"
       >
         <div className="flex items-start justify-between">
           <span className="rounded-full bg-crimson-tint px-3 py-1 text-xs font-medium text-crimson">

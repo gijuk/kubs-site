@@ -3,6 +3,7 @@
 import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { getAdminSupabaseClient } from "@/lib/supabase/adminClient";
+import { readSubmitterInfo } from "@/lib/submitterInfo";
 
 export interface PhotoUploadState {
   error?: string;
@@ -47,6 +48,7 @@ export async function uploadPhotoAction(
     if (file.size > MAX_FILE_SIZE) {
       throw new Error("파일 크기는 8MB 이하만 가능합니다.");
     }
+    const submitter = readSubmitterInfo(formData);
 
     const supabase = getAdminSupabaseClient();
 
@@ -65,15 +67,36 @@ export async function uploadPhotoAction(
       data: { publicUrl },
     } = supabase.storage.from(BUCKET).getPublicUrl(path);
 
-    const { error: insertError } = await supabase.from("photos").insert({
-      src: publicUrl,
-      storage_path: path,
-      date: todayLabel(),
-      event_name: eventName,
-      photographer,
-      alt: alt || eventName,
-    });
+    const { data: inserted, error: insertError } = await supabase
+      .from("photos")
+      .insert({
+        src: publicUrl,
+        storage_path: path,
+        date: todayLabel(),
+        event_name: eventName,
+        photographer,
+        alt: alt || eventName,
+      })
+      .select("id")
+      .single();
     if (insertError) throw new Error(insertError.message);
+
+    // 선택 입력된 연락처/신상은 공개되지 않는 별도 테이블에 저장합니다.
+    // 저장에 실패하면 방금 만든 사진/파일을 되돌려서, 정보가 조용히 사라지지 않게 합니다.
+    if (submitter.phone || submitter.info) {
+      const { error: submitterError } = await supabase
+        .from("photo_submitters")
+        .insert({
+          photo_id: inserted.id,
+          phone: submitter.phone,
+          info: submitter.info,
+        });
+      if (submitterError) {
+        await supabase.from("photos").delete().eq("id", inserted.id);
+        await supabase.storage.from(BUCKET).remove([path]);
+        throw new Error(submitterError.message);
+      }
+    }
 
     refreshPhotoCaches();
     return { success: true };
