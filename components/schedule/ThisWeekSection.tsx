@@ -1,6 +1,7 @@
 import { ArrowUpRight } from "lucide-react";
 import { getUpcomingSchedules } from "@/lib/data/schedules";
 import ScheduleList from "./ScheduleList";
+import GlassShape from "@/components/common/GlassShape";
 
 export default async function ThisWeekSection() {
   const upcoming = await getUpcomingSchedules(5);
@@ -8,9 +9,21 @@ export default async function ThisWeekSection() {
   return (
     <section
       id="this-week"
-      className="border-t border-ivory-line bg-ivory px-6 py-24 md:px-10"
+      className="relative overflow-hidden border-t border-ivory-line bg-ivory px-6 py-24 md:px-10"
     >
-      <div className="mx-auto max-w-editorial">
+      <GlassShape
+        variant="circle"
+        size={200}
+        className="-left-16 top-10 hidden md:block"
+      />
+      <GlassShape
+        variant="hex"
+        size={110}
+        className="right-6 top-1/2 hidden md:block"
+        spin
+      />
+
+      <div className="relative z-10 mx-auto max-w-editorial">
         <div className="reveal flex items-end justify-between gap-6">
           <div>
             <p className="mb-2 text-sm text-crimson">일정</p>

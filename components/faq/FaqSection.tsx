@@ -6,6 +6,7 @@ import type { FaqCategory } from "@/lib/types";
 import FaqSearchBar from "./FaqSearchBar";
 import FaqCategoryFilter from "./FaqCategoryFilter";
 import FaqAccordionItem from "./FaqAccordionItem";
+import GlassShape from "@/components/common/GlassShape";
 
 const CATEGORIES: FaqCategory[] = [
   "학사",
@@ -31,8 +32,23 @@ export default function FaqSection() {
   }, [query, category]);
 
   return (
-    <section id="faq" className="border-t border-ivory-line bg-ivory px-6 py-24 md:px-10">
-      <div className="mx-auto max-w-editorial">
+    <section
+      id="faq"
+      className="relative overflow-hidden border-t border-ivory-line bg-ivory px-6 py-24 md:px-10"
+    >
+      <GlassShape
+        variant="blob"
+        size={200}
+        className="-left-16 bottom-0 hidden md:block"
+      />
+      <GlassShape
+        variant="diamond"
+        size={90}
+        className="right-10 top-10 hidden md:block"
+        spin
+      />
+
+      <div className="relative z-10 mx-auto max-w-editorial">
         <div className="reveal">
           <p className="mb-2 text-sm text-crimson">FAQ</p>
           <h2 className="font-serif text-3xl font-semibold text-ink md:text-4xl">

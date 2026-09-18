@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
+import GlassShape from "@/components/common/GlassShape";
 
 function getTodayLabel(): string {
   const now = new Date();
@@ -23,6 +24,18 @@ export default function HeroSection() {
         alt=""
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-[42%] w-full select-none object-cover object-top opacity-[0.14] sm:h-[50%]"
+      />
+
+      <GlassShape
+        variant="circle"
+        size={240}
+        className="-right-20 top-24 hidden md:block"
+      />
+      <GlassShape
+        variant="hex"
+        size={120}
+        className="left-1/2 top-1/3 hidden md:block"
+        spin
       />
 
       <div className="relative z-10 mx-auto grid w-full max-w-editorial gap-10 md:grid-cols-[1fr_auto] md:items-end">

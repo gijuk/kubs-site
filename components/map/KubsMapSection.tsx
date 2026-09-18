@@ -1,12 +1,25 @@
 import CampusMapExplorer from "./CampusMapExplorer";
+import GlassShape from "@/components/common/GlassShape";
 
 export default function KubsMapSection() {
   return (
     <section
       id="map"
-      className="border-t border-ivory-line bg-ivory-soft px-6 py-24 md:px-10"
+      className="relative overflow-hidden border-t border-ivory-line bg-ivory-soft px-6 py-24 md:px-10"
     >
-      <div className="mx-auto max-w-editorial">
+      <GlassShape
+        variant="circle"
+        size={220}
+        className="-right-20 top-1/3 hidden md:block"
+      />
+      <GlassShape
+        variant="hex"
+        size={100}
+        className="bottom-16 left-10 hidden md:block"
+        spin
+      />
+
+      <div className="relative z-10 mx-auto max-w-editorial">
         <div className="reveal">
           <p className="mb-2 text-sm text-crimson">캠퍼스</p>
           <h2 className="font-serif text-3xl font-semibold text-ink md:text-4xl">
