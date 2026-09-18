@@ -69,3 +69,14 @@ export const PROMOTION_CATEGORY_LABEL: Record<PromotionCategory, string> = {
   recruit: "리크루팅",
   etc: "기타",
 };
+
+export type SuggestionCategory = "학사" | "시설" | "학생회 운영" | "기타";
+
+export interface Suggestion {
+  id: string;
+  category: SuggestionCategory;
+  content: string;
+  contact?: string;
+  isRead: boolean;
+  createdAt: string;
+}

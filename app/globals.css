@@ -6,6 +6,31 @@
 
 :root {
   --font-sans: "Pretendard", -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* 라이트 모드 색상 (R G B, tailwind.config.ts의 rgb(var(...) / alpha)에서 사용) */
+  --color-ivory: 251 249 244;
+  --color-ivory-soft: 245 241 233;
+  --color-ivory-line: 230 224 211;
+  --color-ink: 29 27 24;
+  --color-ink-soft: 81 76 67;
+  --color-ink-faint: 139 132 119;
+  --color-crimson: 122 12 46;
+  --color-crimson-deep: 89 8 32;
+  --color-crimson-bright: 166 32 63;
+  --color-crimson-tint: 243 227 225;
+}
+
+.dark {
+  --color-ivory: 20 18 22;
+  --color-ivory-soft: 29 26 32;
+  --color-ivory-line: 56 51 59;
+  --color-ink: 240 236 230;
+  --color-ink-soft: 199 194 186;
+  --color-ink-faint: 148 141 129;
+  --color-crimson: 166 32 63;
+  --color-crimson-deep: 122 12 46;
+  --color-crimson-bright: 214 74 105;
+  --color-crimson-tint: 58 22 32;
 }
 
 * {
@@ -24,20 +49,21 @@
 }
 
 body {
-  background-color: #fbf9f4;
-  color: #1d1b18;
+  background-color: rgb(var(--color-ivory));
+  color: rgb(var(--color-ink));
   /* 한글 단어가 음절 단위로 중간에 잘려서 다음 줄로 넘어가지 않도록,
      띄어쓰기(단어 경계)에서만 줄바꿈되게 합니다. */
   word-break: keep-all;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 ::selection {
-  background-color: #7a0c2e;
-  color: #fbf9f4;
+  background-color: rgb(var(--color-crimson));
+  color: rgb(var(--color-ivory));
 }
 
 :focus-visible {
-  outline: 2px solid #7a0c2e;
+  outline: 2px solid rgb(var(--color-crimson));
   outline-offset: 3px;
   border-radius: 2px;
 }
@@ -47,7 +73,7 @@ body {
   height: 4px;
 }
 .slim-scroll::-webkit-scrollbar-thumb {
-  background-color: #e6e0d3;
+  background-color: rgb(var(--color-ivory-line));
   border-radius: 999px;
 }
 .slim-scroll::-webkit-scrollbar-track {

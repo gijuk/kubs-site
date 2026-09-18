@@ -336,7 +336,7 @@ export default function TigerRunnerGame() {
 
   return (
     <div className="w-full max-w-2xl">
-      <div className="relative overflow-hidden rounded-2xl border border-ivory/15">
+      <div className="relative overflow-hidden rounded-2xl border border-ivory-fixed/15">
         <canvas
           ref={canvasRef}
           width={CANVAS_W}
@@ -348,31 +348,31 @@ export default function TigerRunnerGame() {
 
         {speedFlash && phase === "playing" && (
           <div className="pointer-events-none absolute inset-x-0 top-4 flex justify-center">
-            <span className="rounded-full bg-crimson/90 px-4 py-1 text-xs font-semibold tracking-wide text-ivory">
+            <span className="rounded-full bg-crimson/90 px-4 py-1 text-xs font-semibold tracking-wide text-ivory-fixed">
               SPEED UP!
             </span>
           </div>
         )}
 
         {phase === "countdown" && countdown !== null && (
-          <div className="absolute inset-0 flex items-center justify-center bg-ink/50">
-            <span className="font-serif text-7xl font-bold text-ivory">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+            <span className="font-serif text-7xl font-bold text-ivory-fixed">
               {countdown}
             </span>
           </div>
         )}
 
         {phase === "gameover" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-ink/70 text-center">
-            <p className="font-serif text-xl font-semibold text-ivory">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 text-center">
+            <p className="font-serif text-xl font-semibold text-ivory-fixed">
               게임 오버
             </p>
-            <p className="text-sm text-ivory/70">
+            <p className="text-sm text-ivory-fixed/70">
               장애물 {finalScore}개 통과 · 역사 {historySeenCount}개 확인
             </p>
             <button
               onClick={startGame}
-              className="rounded-full bg-crimson px-5 py-2 text-sm font-medium text-ivory transition-colors hover:bg-crimson-deep"
+              className="rounded-full bg-crimson px-5 py-2 text-sm font-medium text-ivory-fixed transition-colors hover:bg-crimson-deep"
             >
               다시 시작
             </button>
@@ -380,7 +380,7 @@ export default function TigerRunnerGame() {
         )}
       </div>
 
-      <p className="mt-3 text-center text-xs text-ivory/50">
+      <p className="mt-3 text-center text-xs text-ivory-fixed/50">
         스페이스바·↑ 또는 화면 클릭으로 점프 · 장애물 {OBSTACLES_PER_HISTORY}개를
         넘으면 경영대학의 역사가 열립니다
       </p>

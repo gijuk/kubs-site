@@ -26,7 +26,7 @@ export default function ScheduleModal({ item, onClose }: ScheduleModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-ink/40 backdrop-blur-[2px] md:items-center"
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 backdrop-blur-[2px] md:items-center"
       onClick={onClose}
       role="dialog"
       aria-modal="true"

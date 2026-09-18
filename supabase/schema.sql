@@ -126,3 +126,26 @@ create index if not exists promotions_status_idx on promotions (status);
 insert into storage.buckets (id, name, public)
 values ('promotions', 'promotions', true)
 on conflict (id) do nothing;
+
+-- ============================================================
+-- 익명 건의함: suggestions 테이블
+-- 누구나 익명으로 학생회에 의견을 보낼 수 있고, 관리자만 열람합니다.
+-- 사이트에 공개적으로 노출되는 게시판이 아니므로 승인 절차가 없습니다.
+-- ============================================================
+
+create table if not exists suggestions (
+  id uuid primary key default gen_random_uuid(),
+  category text not null check (category in ('학사', '시설', '학생회 운영', '기타')),
+  content text not null,
+  contact text,
+  is_read boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+-- 익명 의견이라 공개 조회/등록 정책을 만들지 않습니다.
+-- 제출은 /suggestions/actions.ts 서버 액션이, 조회/처리는 관리자 페이지가
+-- 모두 Service Role Key로 접근하므로 별도 정책 없이도 동작합니다.
+alter table suggestions enable row level security;
+
+create index if not exists suggestions_created_at_idx on suggestions (created_at desc);
+create index if not exists suggestions_is_read_idx on suggestions (is_read);

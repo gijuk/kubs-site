@@ -22,7 +22,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ko" className={notoSerifKR.variable}>
+    <html lang="ko" className={notoSerifKR.variable} suppressHydrationWarning>
+      <head>
+        {/* 다크모드 깜빡임(FOUC) 방지: 하이드레이션 전에 동기적으로 실행됩니다. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var s=localStorage.getItem('kubs-theme');var d=s?s==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;if(d)document.documentElement.classList.add('dark');}catch(e){}})();`,
+          }}
+        />
+      </head>
       <body className="font-sans antialiased">
         {children}
         <ScrollReveal />

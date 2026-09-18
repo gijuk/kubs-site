@@ -79,7 +79,7 @@ export default function PromotionUploadModal({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-ink/40 backdrop-blur-[2px] md:items-center"
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 backdrop-blur-[2px] md:items-center"
       onClick={handleClose}
       role="dialog"
       aria-modal="true"
@@ -230,7 +230,7 @@ export default function PromotionUploadModal({
 
       {showWarning && (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/50 p-6"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-6"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="w-full max-w-sm rounded-2xl bg-ivory p-6 shadow-xl">

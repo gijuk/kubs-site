@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
+import ThemeToggle from "@/components/common/ThemeToggle";
+import SuggestionButton from "@/components/suggestions/SuggestionButton";
 
 const NAV_ITEMS = [
   { href: "#this-week", label: "이번 주" },
@@ -50,21 +52,26 @@ export default function Header() {
               {item.label}
             </a>
           ))}
+          <SuggestionButton className="text-sm text-ink-soft transition-colors hover:text-crimson" />
           <a
             href="#admin"
             className="rounded-full border border-crimson px-4 py-1.5 text-sm text-crimson transition-colors hover:bg-crimson hover:text-ivory"
           >
             관리자
           </a>
+          <ThemeToggle className="h-8 w-8" />
         </nav>
 
-        <button
-          className="text-ink md:hidden"
-          onClick={() => setOpen((v) => !v)}
-          aria-label={open ? "메뉴 닫기" : "메뉴 열기"}
-        >
-          {open ? <X size={22} /> : <Menu size={22} />}
-        </button>
+        <div className="flex items-center gap-3 md:hidden">
+          <ThemeToggle className="h-8 w-8" />
+          <button
+            className="text-ink"
+            onClick={() => setOpen((v) => !v)}
+            aria-label={open ? "메뉴 닫기" : "메뉴 열기"}
+          >
+            {open ? <X size={22} /> : <Menu size={22} />}
+          </button>
+        </div>
       </div>
 
       {open && (
@@ -79,6 +86,9 @@ export default function Header() {
               {item.label}
             </a>
           ))}
+          <SuggestionButton
+            className="rounded-md px-2 py-2.5 text-left text-sm text-ink-soft hover:bg-ivory-soft hover:text-crimson"
+          />
         </nav>
       )}
     </header>

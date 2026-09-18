@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 type ShapeVariant = "circle" | "hex" | "diamond" | "blob";
-type Tone = "crimson" | "ivory";
+type Tone = "crimson" | "white";
 
 const CLIP_PATHS: Partial<Record<ShapeVariant, string>> = {
   hex: "polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0% 50%)",
@@ -14,8 +14,9 @@ const CLIP_PATHS: Partial<Record<ShapeVariant, string>> = {
 const TONE_CLASSES: Record<Tone, string> = {
   crimson:
     "border-crimson/25 bg-gradient-to-br from-crimson/20 via-crimson/5 to-transparent",
-  ivory:
-    "border-ivory/25 bg-gradient-to-br from-ivory/25 via-ivory/5 to-transparent",
+  // 다크모드 여부와 무관하게 항상 어두운 배경(게임 섹션 등) 위에 쓰는 고정 톤
+  white:
+    "border-white/25 bg-gradient-to-br from-white/25 via-white/5 to-transparent",
 };
 
 interface GlassShapeProps {

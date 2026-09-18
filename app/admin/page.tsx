@@ -2,10 +2,12 @@ import { LogOut } from "lucide-react";
 import { getAllSchedules } from "@/lib/data/schedules";
 import { getAllPhotosForAdmin } from "@/lib/data/photos";
 import { getAllPromotionsForAdmin } from "@/lib/data/promotions";
+import { getAllSuggestionsForAdmin } from "@/lib/data/suggestions";
 import { logoutAction } from "./login/actions";
 import AdminScheduleManager from "./AdminScheduleManager";
 import AdminPhotoManager from "./AdminPhotoManager";
 import AdminPromotionManager from "./AdminPromotionManager";
+import AdminSuggestionManager from "./AdminSuggestionManager";
 
 export const dynamic = "force-dynamic";
 
@@ -14,10 +16,11 @@ export const metadata = {
 };
 
 export default async function AdminPage() {
-  const [items, photos, promotions] = await Promise.all([
+  const [items, photos, promotions, suggestions] = await Promise.all([
     getAllSchedules(),
     getAllPhotosForAdmin(),
     getAllPromotionsForAdmin(),
+    getAllSuggestionsForAdmin(),
   ]);
 
   return (
@@ -74,6 +77,18 @@ export default async function AdminPage() {
           </p>
           <div className="mt-6">
             <AdminPromotionManager items={promotions} />
+          </div>
+        </div>
+
+        <div className="mt-16 border-t border-ivory-line pt-10">
+          <h2 className="font-serif text-xl font-semibold text-ink">
+            익명 건의함
+          </h2>
+          <p className="mt-2 max-w-[60ch] text-sm leading-relaxed text-ink-faint">
+            사이트에는 공개되지 않고 관리자만 볼 수 있는 익명 건의 목록입니다.
+          </p>
+          <div className="mt-6">
+            <AdminSuggestionManager items={suggestions} />
           </div>
         </div>
       </div>

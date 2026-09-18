@@ -9,7 +9,7 @@ function Sprockets() {
       {Array.from({ length: 14 }).map((_, i) => (
         <span
           key={i}
-          className="h-2.5 w-2.5 rounded-[2px] bg-ink/80"
+          className="h-2.5 w-2.5 rounded-[2px] bg-black/80"
           aria-hidden
         />
       ))}
@@ -37,14 +37,14 @@ export default function HistoryFilmModal({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-ink/85 p-6 backdrop-blur-sm"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 p-6 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
     >
       <div className="w-full max-w-xl">
         {/* 필름 스트립: 좌우로 살짝 보이는 이전/다음 프레임 느낌 */}
         <div className="flex items-center gap-2">
-          <div className="hidden h-40 w-8 shrink-0 rounded-md bg-ivory/5 sm:block" />
+          <div className="hidden h-40 w-8 shrink-0 rounded-md bg-ivory-fixed/5 sm:block" />
 
           <div className="min-w-0 flex-1 animate-fade-up rounded-lg bg-[#161217] shadow-2xl">
             <div className="pt-3">
@@ -53,26 +53,26 @@ export default function HistoryFilmModal({
 
             <div className="px-6 py-6 sm:px-8 sm:py-8">
               <div className="mb-4 flex items-center gap-2">
-                <span className="rounded-full bg-crimson px-3 py-1 text-xs font-medium text-ivory">
+                <span className="rounded-full bg-crimson px-3 py-1 text-xs font-medium text-ivory-fixed">
                   KUBS HISTORY
                 </span>
-                <span className="h-px flex-1 bg-ivory/15" />
+                <span className="h-px flex-1 bg-ivory-fixed/15" />
               </div>
 
               <p className="font-serif text-5xl font-bold leading-none tracking-tight text-crimson-bright sm:text-6xl">
                 {entry.year}
               </p>
-              <h3 className="mt-3 font-serif text-xl font-semibold text-ivory sm:text-2xl">
+              <h3 className="mt-3 font-serif text-xl font-semibold text-ivory-fixed sm:text-2xl">
                 {entry.title}
               </h3>
-              <p className="mt-4 text-sm leading-relaxed text-ivory/70">
+              <p className="mt-4 text-sm leading-relaxed text-ivory-fixed/70">
                 {entry.description}
               </p>
 
               <div className="mt-7 flex justify-end">
                 <button
                   onClick={onContinue}
-                  className="rounded-full bg-crimson px-6 py-2.5 text-sm font-medium text-ivory transition-colors hover:bg-crimson-deep"
+                  className="rounded-full bg-crimson px-6 py-2.5 text-sm font-medium text-ivory-fixed transition-colors hover:bg-crimson-deep"
                 >
                   게임 계속하기 →
                 </button>
@@ -84,7 +84,7 @@ export default function HistoryFilmModal({
             </div>
           </div>
 
-          <div className="hidden h-40 w-8 shrink-0 rounded-md bg-ivory/5 sm:block" />
+          <div className="hidden h-40 w-8 shrink-0 rounded-md bg-ivory-fixed/5 sm:block" />
         </div>
       </div>
     </div>
