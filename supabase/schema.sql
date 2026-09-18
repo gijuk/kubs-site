@@ -190,3 +190,51 @@ create table if not exists game_scores (
 alter table game_scores enable row level security;
 
 create index if not exists game_scores_score_idx on game_scores (score desc, updated_at asc);
+
+-- ============================================================
+-- KUBS History Game 학번 대항전: game_players 테이블 + 합산 함수/뷰
+-- 플레이어(브라우저)마다 "선택한 학번"과 "지금까지 넘은 장애물 누적 개수"를 저장하고,
+-- 학번별로 합산해서 경쟁합니다. 공개 정책이 없으므로 등록/조회는 모두
+-- /app/game/actions.ts 서버 액션(Service Role Key)이 처리합니다.
+-- ============================================================
+
+create table if not exists game_players (
+  player_id uuid primary key,
+  cohort text not null check (cohort in ('26', '25', '24', '23', '22', '21', '20', '19', 'etc')),
+  total_cleared integer not null default 0 check (total_cleared >= 0),
+  runs integer not null default 0,
+  updated_at timestamptz not null default now()
+);
+
+alter table game_players enable row level security;
+
+create index if not exists game_players_cohort_idx on game_players (cohort);
+
+-- 한 판이 끝날 때마다 누적 개수를 원자적으로 더합니다. (동시에 여러 판이 끝나도 안전)
+create or replace function record_game_run(p_player uuid, p_cohort text, p_cleared integer)
+returns void
+language plpgsql
+as $$
+begin
+  insert into game_players (player_id, cohort, total_cleared, runs, updated_at)
+  values (p_player, p_cohort, p_cleared, 1, now())
+  on conflict (player_id) do update
+    set cohort = excluded.cohort,
+        total_cleared = game_players.total_cleared + excluded.total_cleared,
+        runs = game_players.runs + 1,
+        updated_at = now();
+end;
+$$;
+
+-- 브라우저(anon/authenticated)에서 직접 호출하지 못하게 하고 서버(Service Role)만 쓰게 합니다.
+revoke execute on function record_game_run(uuid, text, integer) from public, anon, authenticated;
+
+-- 학번별 합산 결과
+create or replace view game_cohort_totals as
+  select cohort,
+         sum(total_cleared)::bigint as total,
+         count(*)::integer as players
+  from game_players
+  group by cohort;
+
+revoke all on game_cohort_totals from anon, authenticated;

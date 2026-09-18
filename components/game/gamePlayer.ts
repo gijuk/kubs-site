@@ -1,8 +1,9 @@
-/** 랭킹에 쓰는 플레이어 식별 정보(브라우저 저장소). 저장소를 못 쓰는 환경에서도 에러 없이 동작합니다. */
+﻿/** 랭킹에 쓰는 플레이어 식별 정보(브라우저 저장소). 저장소를 못 쓰는 환경에서도 에러 없이 동작합니다. */
 
 const PLAYER_KEY = "kubs-game-player";
 const NICK_KEY = "kubs-game-nick";
 const SKIP_KEY = "kubs-game-nick-skip";
+const COHORT_KEY = "kubs-game-cohort";
 
 export const NICKNAME_MAX = 12;
 
@@ -60,5 +61,24 @@ export function writeSkipped() {
     sessionStorage.setItem(SKIP_KEY, "1");
   } catch {
     /* 무시 */
+  }
+}
+
+export function readCohort(): string {
+  try {
+    return localStorage.getItem(COHORT_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** 빈 문자열이면 학번 설정을 지웁니다. */
+export function writeCohort(code: string) {
+  try {
+    if (code) localStorage.setItem(COHORT_KEY, code);
+    else localStorage.removeItem(COHORT_KEY);
+    sessionStorage.removeItem(SKIP_KEY);
+  } catch {
+    /* 저장소를 못 쓰면 이번 방문 동안만 유지 */
   }
 }

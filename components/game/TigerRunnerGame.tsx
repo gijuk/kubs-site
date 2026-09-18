@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { kubsHistory, type KubsHistoryEntry } from "@/lib/data/kubsHistory";
@@ -6,8 +6,16 @@ import { drawObstacle, drawTiger } from "./tigerSprites";
 import Portal from "@/components/common/Portal";
 import HistoryFilmModal from "./HistoryFilmModal";
 import GameLeaderboard, { type FinishedRun } from "./GameLeaderboard";
-import NicknameModal, { type NicknameModalMode } from "./NicknameModal";
-import { readNickname, readSkipped, writeNickname, writeSkipped } from "./gamePlayer";
+import CohortLeaderboard from "./CohortLeaderboard";
+import NicknameModal, { type NicknameModalMode, type PlayerProfile } from "./NicknameModal";
+import {
+  readCohort,
+  readNickname,
+  readSkipped,
+  writeCohort,
+  writeNickname,
+  writeSkipped,
+} from "./gamePlayer";
 import { GROUND_Y, TIGER_X, WORLD_H, WORLD_W } from "./gameConstants";
 import {
   FLY_BASE_Y,
@@ -90,6 +98,9 @@ export default function TigerRunnerGame() {
   const [nicknameChange, setNicknameChange] = useState(0);
   const [nickModal, setNickModal] = useState<NicknameModalMode | null>(null);
   const [autoResult, setAutoResult] = useState<string | null>(null);
+  const [cohort, setCohort] = useState("");
+  const [cohortChange, setCohortChange] = useState(0);
+  const [cohortResult, setCohortResult] = useState<string | null>(null);
 
   const phaseRef = useRef<Phase>("idle");
   const engineRef = useRef<EngineState>(createEngine());
@@ -98,6 +109,7 @@ export default function TigerRunnerGame() {
   const playMsRef = useRef(0);
   const runIdRef = useRef(0);
   const nicknameRef = useRef("");
+  const cohortRef = useRef("");
   const nickModalRef = useRef<NicknameModalMode | null>(null);
   const skippedRef = useRef(false);
   const visibleRatioRef = useRef(0);
@@ -124,6 +136,9 @@ export default function TigerRunnerGame() {
     const nick = readNickname();
     nicknameRef.current = nick;
     setNickname(nick);
+    const savedCohort = readCohort();
+    cohortRef.current = savedCohort;
+    setCohort(savedCohort);
     skippedRef.current = readSkipped();
   }, []);
 
@@ -184,6 +199,7 @@ export default function TigerRunnerGame() {
     setSpeedFlash(null);
     setRun(null);
     setAutoResult(null);
+    setCohortResult(null);
     playMsRef.current = 0;
     setPhaseBoth("playing");
   }, []);
@@ -217,8 +233,8 @@ export default function TigerRunnerGame() {
     const p = phaseRef.current;
     if (nickModalRef.current) return; // 닉네임 창이 열려 있는 동안은 게임 입력을 받지 않습니다.
     if (p === "idle") {
-      // 처음 시작할 때 한 번, 닉네임을 설정할지 묻습니다. (선택사항)
-      if (!nicknameRef.current && !skippedRef.current) openNickModal("start");
+      // 처음 시작할 때 한 번, 닉네임·학번을 설정할지 묻습니다. (선택사항)
+      if (!nicknameRef.current && !cohortRef.current && !skippedRef.current) openNickModal("start");
       else startGame();
     } else if (p === "playing") {
       const s = engineRef.current;
@@ -481,14 +497,19 @@ export default function TigerRunnerGame() {
     };
   }, [nextHistoryEntry, spawnBurst, spawnDust]);
 
-  const handleNicknameSave = useCallback(
-    (nick: string) => {
+  const handleProfileSave = useCallback(
+    ({ nickname: nick, cohort: nextCohort }: PlayerProfile) => {
       const mode = nickModalRef.current;
-      const changed = nick !== nicknameRef.current;
+      const nickChanged = nick !== nicknameRef.current;
+      const cohortChanged = nextCohort !== cohortRef.current;
       writeNickname(nick);
+      writeCohort(nextCohort);
       nicknameRef.current = nick;
+      cohortRef.current = nextCohort;
       setNickname(nick);
-      if (changed) setNicknameChange((n) => n + 1);
+      setCohort(nextCohort);
+      if (nickChanged) setNicknameChange((n) => n + 1);
+      if (cohortChanged) setCohortChange((n) => n + 1);
       openNickModal(null);
       if (mode === "start" && phaseRef.current === "idle") startGame();
     },
@@ -583,9 +604,12 @@ export default function TigerRunnerGame() {
             {autoResult && (
               <p className="text-sm font-medium text-crimson-bright">{autoResult}</p>
             )}
-            {!nickname && finalScore > 0 && (
+            {cohortResult && (
+              <p className="text-sm font-medium text-[#F2C14E]">{cohortResult}</p>
+            )}
+            {!nickname && !cohort && finalScore > 0 && (
               <p className="text-xs text-ivory-fixed/50">
-                닉네임을 설정하면 기록이 순위에 자동 집계돼요 (아래 랭킹 패널)
+                닉네임·학번을 설정하면 기록이 순위에 자동 집계돼요 (아래 랭킹 패널)
               </p>
             )}
             <p className="mt-2 rounded-full bg-crimson px-5 py-2 text-sm font-medium text-ivory-fixed">
@@ -609,11 +633,19 @@ export default function TigerRunnerGame() {
         onRequestNickname={() => openNickModal("edit")}
       />
 
+      <CohortLeaderboard
+        run={run}
+        cohort={cohort}
+        cohortChange={cohortChange}
+        onResult={setCohortResult}
+        onRequestProfile={() => openNickModal("edit")}
+      />
+
       {nickModal && (
         <NicknameModal
           mode={nickModal}
-          initial={nickname}
-          onSave={handleNicknameSave}
+          initial={{ nickname, cohort }}
+          onSave={handleProfileSave}
           onSkip={handleNicknameSkip}
           onClose={() => openNickModal(null)}
         />
