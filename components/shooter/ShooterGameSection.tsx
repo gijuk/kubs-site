@@ -22,8 +22,8 @@ export default function ShooterGameSection() {
             KUBS Tiger Shooter
           </h2>
           <p className="max-w-[46ch] text-sm leading-relaxed text-ink-soft">
-            호랑이 분대를 좌우로 움직여 몰려오는 몬스터 무리를 물리쳐 보세요.
-            +N 장벽을 지나면 병력이 늘고, -N 장벽을 지나면 줄어듭니다.
+            호랑이 1마리로 시작해, 좌우로 움직이며 +N 장벽으로 병력을 늘리세요.
+            기둥을 부수면 뒤의 몬스터가 한 번에 사라지고, 스테이지 끝에는 보스가 기다립니다.
           </p>
         </div>
 

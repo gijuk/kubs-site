@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Users } from "lucide-react";
 import {
   MAX_LEVEL,
   STAGE_LENGTH,
@@ -13,6 +14,7 @@ import {
 import type { ShooterRenderer } from "./shooterRenderer";
 
 const BEST_KEY = "kubs-shooter-best";
+const BEST_STAGE_KEY = "kubs-shooter-best-stage";
 /** 화면 가로 전체를 드래그했을 때 플레이어가 움직이는 월드 거리 (도로 폭보다 살짝 크게) */
 const DRAG_WORLD_WIDTH = 13;
 /** 드래그 목표의 바깥 한계 (엔진이 분대 폭만큼 다시 안쪽으로 조정합니다) */
@@ -24,6 +26,9 @@ const TARGET_INTERACTIVE = "input, textarea, select, button, a, summary, [conten
 type UiPhase = "ready" | "playing" | "paused" | "gameover" | "clear";
 
 interface Hud {
+  stage: number;
+  /** 보스 체력 비율 (보스가 없으면 -1) */
+  bossRatio: number;
   level: number;
   kills: number;
   expRatio: number;
@@ -32,7 +37,16 @@ interface Hud {
   boss: boolean;
 }
 
-const INITIAL_HUD: Hud = { level: 1, kills: 0, expRatio: 0, progress: 0, squad: 3, boss: false };
+const INITIAL_HUD: Hud = {
+  stage: 1,
+  bossRatio: -1,
+  level: 1,
+  kills: 0,
+  expRatio: 0,
+  progress: 0,
+  squad: 1,
+  boss: false,
+};
 
 function readBest(): number {
   try {
@@ -40,6 +54,23 @@ function readBest(): number {
     return Number.isFinite(v) && v > 0 ? Math.floor(v) : 0;
   } catch {
     return 0;
+  }
+}
+
+function readBestStage(): number {
+  try {
+    const v = Number(localStorage.getItem(BEST_STAGE_KEY));
+    return Number.isFinite(v) && v > 0 ? Math.floor(v) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeBestStage(v: number) {
+  try {
+    localStorage.setItem(BEST_STAGE_KEY, String(v));
+  } catch {
+    /* 무시 */
   }
 }
 
@@ -58,6 +89,9 @@ export default function ShooterGame() {
   const [phase, setPhase] = useState<UiPhase>("ready");
   const [hud, setHud] = useState<Hud>(INITIAL_HUD);
   const [levelUp, setLevelUp] = useState<{ key: number; level: number; squad: number } | null>(null);
+  const [banner, setBanner] = useState<{ key: number; title: string; tone: "stage" | "clear" } | null>(null);
+  const [flash, setFlash] = useState(0);
+  const [bestStage, setBestStage] = useState(0);
   const [best, setBest] = useState(0);
   const [newBest, setNewBest] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
@@ -71,6 +105,9 @@ export default function ShooterGame() {
   const keysRef = useRef({ left: false, right: false });
   const dragRef = useRef<{ pointerId: number; startX: number; startPlayerX: number } | null>(null);
   const bestRef = useRef(0);
+  const bestStageRef = useRef(0);
+  const bannerKeyRef = useRef(0);
+  const bannerTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const levelUpKeyRef = useRef(0);
   const levelUpTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -83,6 +120,9 @@ export default function ShooterGame() {
     const saved = readBest();
     bestRef.current = saved;
     setBest(saved);
+    const savedStage = readBestStage();
+    bestStageRef.current = savedStage;
+    setBestStage(savedStage);
   }, []);
 
   const applyKeys = useCallback(() => {
@@ -98,6 +138,7 @@ export default function ShooterGame() {
     hudRef.current = INITIAL_HUD;
     setHud(INITIAL_HUD);
     setLevelUp(null);
+    setBanner(null);
     setNewBest(false);
     setPhaseBoth("playing");
   }, [setPhaseBoth]);
@@ -164,9 +205,14 @@ export default function ShooterGame() {
           level: s.level,
           kills: s.kills,
           expRatio: s.level >= MAX_LEVEL ? 1 : s.exp / expToNext(s.level),
-          progress: Math.min(1, s.distance / STAGE_LENGTH),
+          progress: Math.min(1, s.stageDist / STAGE_LENGTH),
           squad: s.squad,
           boss: s.bossSpawned,
+          stage: s.stage,
+          bossRatio: (() => {
+            const b = s.entities.find((e) => e.kind === "boss");
+            return b ? Math.max(0, b.hp / b.maxHp) : -1;
+          })(),
         };
         const prev = hudRef.current;
         if (
@@ -174,6 +220,8 @@ export default function ShooterGame() {
           h.kills !== prev.kills ||
           h.boss !== prev.boss ||
           h.squad !== prev.squad ||
+          h.stage !== prev.stage ||
+          Math.abs(h.bossRatio - prev.bossRatio) > 0.01 ||
           Math.abs(h.expRatio - prev.expRatio) > 0.005 ||
           Math.abs(h.progress - prev.progress) > 0.005
         ) {
@@ -187,18 +235,35 @@ export default function ShooterGame() {
             setLevelUp({ key: levelUpKeyRef.current, level: ev.level, squad: ev.squad });
             clearTimeout(levelUpTimeoutRef.current);
             levelUpTimeoutRef.current = setTimeout(() => setLevelUp(null), 1300);
-          } else if (ev.type === "gameOver" || ev.type === "stageClear") {
+          } else if (ev.type === "stageStart" || ev.type === "stageClear") {
+            bannerKeyRef.current += 1;
+            setBanner({
+              key: bannerKeyRef.current,
+              title: ev.type === "stageStart" ? `STAGE ${ev.stage}` : "STAGE CLEAR!",
+              tone: ev.type === "stageStart" ? "stage" : "clear",
+            });
+            clearTimeout(bannerTimeoutRef.current);
+            bannerTimeoutRef.current = setTimeout(() => setBanner(null), ev.type === "stageStart" ? 1500 : 1900);
+          } else if (ev.type === "explode") {
+            setFlash((f) => f + 1);
+          } else if (ev.type === "gameOver") {
             const isNew = s.kills > bestRef.current;
             if (isNew) {
               bestRef.current = s.kills;
               writeBest(s.kills);
               setBest(s.kills);
             }
+            if (s.stage > bestStageRef.current) {
+              bestStageRef.current = s.stage;
+              writeBestStage(s.stage);
+              setBestStage(s.stage);
+            }
             setNewBest(isNew && s.kills > 0);
             s.input.dragTargetX = null;
             s.input.moveDir = 0;
             dragRef.current = null;
-            setPhaseBoth(ev.type === "gameOver" ? "gameover" : "clear");
+            setBanner(null);
+            setPhaseBoth("gameover");
           }
         }
 
@@ -212,6 +277,7 @@ export default function ShooterGame() {
       cancelled = true;
       cancelAnimationFrame(raf);
       clearTimeout(levelUpTimeoutRef.current);
+      clearTimeout(bannerTimeoutRef.current);
       ro?.disconnect();
       renderer?.dispose();
       renderer = null;
@@ -355,6 +421,9 @@ export default function ShooterGame() {
     <div className="w-full">
       <style>{`
         @keyframes shooter-levelup { 0% { transform: scale(0.4); opacity: 0; } 25% { transform: scale(1.15); opacity: 1; } 70% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.05) translateY(-24px); opacity: 0; } }
+        @keyframes shooter-toast { 0% { transform: translateY(-6px); opacity: 0; } 15% { transform: translateY(0); opacity: 1; } 75% { opacity: 1; } 100% { transform: translateY(-8px); opacity: 0; } }
+        @keyframes shooter-banner { 0% { transform: scale(1.6); opacity: 0; } 18% { transform: scale(1); opacity: 1; } 75% { transform: scale(1); opacity: 1; } 100% { transform: scale(0.96); opacity: 0; } }
+        @keyframes shooter-flash { 0% { opacity: 0.85; } 100% { opacity: 0; } }
         @keyframes shooter-pop { 0% { transform: scale(0.85); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
       `}</style>
 
@@ -392,12 +461,14 @@ export default function ShooterGame() {
                   style={{ width: `${Math.round(hud.expRatio * 100)}%` }}
                 />
               </div>
-              <p
-                className="mt-1 whitespace-nowrap font-extrabold text-white drop-shadow"
-                style={{ fontSize: "clamp(8px, 3.2cqw, 14px)" }}
+              <div
+                className="mt-1.5 inline-flex items-center gap-[1.4cqw] whitespace-nowrap rounded-2xl bg-blue-500 px-[2.6cqw] py-[1cqw] font-black text-white shadow-md ring-2 ring-white"
+                style={{ fontSize: "clamp(10px, 4.6cqw, 22px)" }}
+                aria-label={`병력 ${hud.squad}명`}
               >
-                병력 {hud.squad}명
-              </p>
+                <Users size={14} strokeWidth={2.6} className="h-[1em] w-[1em]" />
+                <span>× {hud.squad}</span>
+              </div>
             </div>
 
             <div className="pointer-events-none absolute right-[3cqw] top-[10cqw] text-right">
@@ -421,30 +492,55 @@ export default function ShooterGame() {
                 className="mt-[0.6cqw] flex justify-between font-extrabold text-white drop-shadow"
                 style={{ fontSize: "clamp(7px, 2.6cqw, 11px)" }}
               >
-                <span>STAGE 1</span>
+                <span>STAGE {hud.stage}</span>
                 <span className={hud.boss ? "text-rose-200" : ""}>{hud.boss ? "BOSS!" : "BOSS"}</span>
               </div>
-            </div>          </>
+              {hud.bossRatio >= 0 && (
+                <div className="mx-auto mt-[1.2cqw] h-[2.6cqw] min-h-[6px] w-[64%] overflow-hidden rounded-full border-2 border-white bg-slate-900/40">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-rose-500 to-orange-400 transition-[width] duration-150"
+                    style={{ width: `${Math.round(hud.bossRatio * 100)}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          </>
         )}
 
-        {/* LEVEL UP 연출 */}
+        {/* LEVEL UP: 시야를 가리지 않는 작은 알림 */}
         {levelUp && playing && (
-          <div key={levelUp.key} className="pointer-events-none absolute inset-x-0 top-[24%] flex flex-col items-center">
+          <div key={levelUp.key} className="pointer-events-none absolute inset-x-0 top-[24cqw] flex justify-center">
             <div
-              className="rounded-3xl bg-yellow-300 px-6 py-2 text-3xl font-black tracking-wider text-orange-600 shadow-xl ring-4 ring-white sm:text-4xl"
-              style={{ animation: "shooter-levelup 1.3s ease-out forwards" }}
+              className="whitespace-nowrap rounded-full bg-yellow-300 px-[3.2cqw] py-[1cqw] font-black text-orange-600 shadow-md ring-2 ring-white"
+              style={{ fontSize: "clamp(9px, 3.6cqw, 15px)", animation: "shooter-toast 1.2s ease-out forwards" }}
             >
-              LEVEL UP!
+              LEVEL UP! · 병력 +1
             </div>
-            <p
-              className="mt-2 rounded-full bg-white/95 px-4 py-1 text-sm font-black text-slate-700 shadow"
-              style={{ animation: "shooter-levelup 1.3s ease-out forwards" }}
-            >
-              LEVEL {levelUp.level} · 병력 +1 (총 {levelUp.squad}명)
-            </p>
           </div>
         )}
 
+        {/* STAGE 배너 (스테이지 진입/클리어) */}
+        {banner && (
+          <div key={banner.key} className="pointer-events-none absolute inset-x-0 top-[30%] flex justify-center">
+            <div
+              className={`rounded-3xl px-[7cqw] py-[2.4cqw] font-black tracking-wider shadow-xl ring-4 ring-white ${
+                banner.tone === "stage" ? "bg-sky-500 text-white" : "bg-yellow-300 text-orange-600"
+              }`}
+              style={{ fontSize: "clamp(20px, 9cqw, 40px)", animation: "shooter-banner 1.5s ease-out forwards" }}
+            >
+              {banner.title}
+            </div>
+          </div>
+        )}
+
+        {/* 기둥 폭발 섬광 */}
+        {flash > 0 && (
+          <div
+            key={flash}
+            className="pointer-events-none absolute inset-0 bg-white"
+            style={{ animation: "shooter-flash 0.28s ease-out forwards" }}
+          />
+        )}
         {/* 시작 화면 */}
         {phase === "ready" && !failed && (
           <Overlay tone="light" raised>
@@ -466,12 +562,13 @@ export default function ShooterGame() {
             </button>
             <ul className="mt-6 space-y-1 text-center text-xs font-bold text-white drop-shadow sm:text-sm">
               <li>← → / A D 또는 화면 드래그로 좌우 이동</li>
-              <li>파란 장벽(+N)은 먹고, 빨간 장벽(-N)은 피하세요</li>
-              <li>병력이 모두 쓰러지면 게임 오버!</li>
+              <li>처음엔 1명! 파란 장벽(+N)으로 병력을 늘리세요</li>
+              <li>기둥을 부수면 뒤의 몬스터가 한 번에 폭발!</li>
+              <li>병력이 모두 쓰러지면 게임 오버</li>
             </ul>
             {best > 0 && (
               <p className="mt-4 rounded-full bg-white/90 px-4 py-1 text-xs font-black text-slate-700">
-                최고 처치 {best}
+                최고 STAGE {bestStage || 1} · 최고 처치 {best}
               </p>
             )}
           </Overlay>
@@ -492,25 +589,21 @@ export default function ShooterGame() {
         )}
 
         {/* 게임 오버 / 스테이지 클리어 */}
-        {(phase === "gameover" || phase === "clear") && (
+        {phase === "gameover" && (
           <Overlay tone="dark">
-            <p
-              className={`text-4xl font-black drop-shadow ${phase === "clear" ? "text-yellow-300" : "text-white"}`}
-            >
-              {phase === "clear" ? "STAGE CLEAR!" : "GAME OVER"}
-            </p>
+            <p className="text-4xl font-black text-white drop-shadow">GAME OVER</p>
             {newBest && <p className="mt-1 text-sm font-black text-yellow-300">NEW BEST!</p>}
             <div className="mt-4 flex gap-3">
               <Stat label="처치" value={hud.kills} />
-              <Stat label="LEVEL" value={hud.level} />
-              <Stat label="최고" value={Math.max(best, hud.kills)} />
+              <Stat label="STAGE" value={hud.stage} />
+              <Stat label="최고 STAGE" value={Math.max(bestStage, hud.stage)} />
             </div>
             <button
               type="button"
               onClick={start}
               className="mt-7 rounded-full bg-gradient-to-b from-yellow-300 to-orange-400 px-10 py-3.5 text-xl font-black tracking-wider text-white shadow-[0_6px_0_#d9761a,0_12px_20px_rgba(0,0,0,0.25)] transition-transform active:translate-y-1 active:shadow-[0_2px_0_#d9761a]"
             >
-              {phase === "clear" ? "다시 도전" : "RETRY"}
+              RETRY
             </button>
           </Overlay>
         )}
@@ -523,7 +616,7 @@ export default function ShooterGame() {
       </div>
 
       <p className="mt-3 text-center text-xs text-ink-faint">
-        ← → / A D 또는 화면 드래그로 좌우 이동 · 병력이 각자 자동 발사 · 장벽 숫자로 병력을 늘리세요
+        ← → / A D 또는 화면 드래그로 좌우 이동 · 병력이 각자 자동 발사 · 장벽과 기둥을 잘 골라 병력을 모으세요
       </p>
     </div>
   );

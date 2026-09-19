@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import {
   ROAD_HALF_WIDTH,
+  SLOT_DZ,
   SQUAD_MAX,
   formation,
   squadHalfWidth,
@@ -34,7 +35,10 @@ function pillPath(g: CanvasRenderingContext2D, x: number, y: number, w: number, 
 
 const SKY = 0x8fd6ff;
 const MAX_BULLETS = 520;
-const MAX_PARTICLES = 220;
+const MAX_PARTICLES = 340;
+const MAX_SHOTS = 48;
+/** 병력 캐릭터를 크게 (몰입감) */
+const TIGER_SCALE = 1.35;
 const MAX_ENEMY_INSTANCES = 200;
 const DASH_ROWS = 15;
 const DASH_SPACING = 8;
@@ -46,9 +50,12 @@ const DECOR_COLORS = [0xff9eb5, 0xffd166, 0x7ee0c3, 0x8ab6ff, 0xc6a4ff];
 const WALL_COLORS = [0xffb26b, 0x6fd6c0, 0xff8fb1, 0x8fb4ff];
 const MOB_COLORS = [0xa46bf5, 0xa46bf5, 0xb885ff, 0x9a5ff0];
 const ELITE_COLOR = 0xff6f8a;
+const RUNNER_COLOR = 0x4fd98a;
 
 interface EntityView {
   group: THREE.Group;
+  /** 보스 방어막 */
+  shield?: THREE.Mesh;
   sprite: THREE.Sprite;
   flashMats: THREE.MeshLambertMaterial[];
   lastHp: number;
@@ -306,6 +313,30 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
   scene.add(particleMesh);
   const particles: Particle[] = [];
 
+  // ── 보스 투사체 (빨간 구슬, 총알로 격추 가능) ──
+  const shotMesh = new THREE.InstancedMesh(
+    sphereGeo,
+    track(new THREE.MeshBasicMaterial({ color: 0xff4d5e })),
+    MAX_SHOTS
+  );
+  const shotGlow = new THREE.InstancedMesh(
+    sphereGeo,
+    track(
+      new THREE.MeshBasicMaterial({
+        color: 0xff9aa6,
+        transparent: true,
+        opacity: 0.4,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    ),
+    MAX_SHOTS
+  );
+  for (const m of [shotMesh, shotGlow]) {
+    m.frustumCulled = false;
+    scene.add(m);
+  }
+
   // ── 레벨업 링 ──
   const ring = new THREE.Mesh(
     track(new THREE.RingGeometry(0.85, 1, 40)),
@@ -325,6 +356,28 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
   scene.add(ring);
   let ringT = 1;
 
+  // 기둥 폭발 충격파
+  const blast = new THREE.Mesh(
+    track(new THREE.RingGeometry(0.8, 1, 48)),
+    track(
+      new THREE.MeshBasicMaterial({
+        color: 0xffb13d,
+        transparent: true,
+        opacity: 0,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      })
+    )
+  );
+  blast.rotation.x = -Math.PI / 2;
+  blast.position.y = 0.08;
+  blast.visible = false;
+  scene.add(blast);
+  let blastT = 1;
+  let blastX = 0;
+  let blastZ = 0;
+  let blastR = 7;
+
   // ── 텍스트 스프라이트 텍스처 (내용별로 캐시해 재사용) ──
   const textures = new Map<string, THREE.CanvasTexture>();
   function labelTexture(key: string, draw: (g: CanvasRenderingContext2D) => void, w = 160, h = 80) {
@@ -342,7 +395,7 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
 
   function hpTexture(kind: Entity["kind"], hp: number) {
     return labelTexture(`hp:${kind}:${hp}`, (g) => {
-      g.fillStyle = kind === "boss" ? "#ff6b7a" : kind === "wall" ? "#ffd166" : "#ffffff";
+      g.fillStyle = kind === "boss" ? "#ff6b7a" : kind === "wall" || kind === "pillar" ? "#ffd166" : "#ffffff";
       g.strokeStyle = "#2b2f3a";
       g.lineWidth = 6;
       pillPath(g, 6, 8, 148, 64, 26);
@@ -431,7 +484,7 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
     group.add(mesh(sphereGeo, limbMat, 0.17, 0.1, 0.2, -0.28, 0.08, 0.1));
     group.add(mesh(sphereGeo, limbMat, 0.17, 0.1, 0.2, 0.28, 0.08, 0.1));
     group.add(blobShadow(0.85));
-    group.scale.setScalar(2.8);
+    group.scale.setScalar(3.4);
     return { group, mats: [bodyMat, limbMat] };
   }
 
@@ -448,28 +501,65 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
     return { group, mats: [bodyMat, capMat] };
   }
 
+  /** 큰 기둥: 뒤에 숨은 적들을 지키는 탑. 부수면 폭발합니다. */
+  function buildPillar(e: Entity): { group: THREE.Group; mats: THREE.MeshLambertMaterial[] } {
+    const group = new THREE.Group();
+    const stone = new THREE.MeshLambertMaterial({ color: 0xd9dfea });
+    const band = new THREE.MeshLambertMaterial({ color: 0xff5a63 });
+    const w = e.w;
+    group.add(mesh(cylGeo, stone, w * 0.5, e.h, w * 0.5, 0, e.h / 2, 0));
+    group.add(mesh(cylGeo, stone, w * 0.62, 0.35, w * 0.62, 0, 0.18, 0));
+    for (const y of [0.35, 0.62]) {
+      group.add(mesh(cylGeo, band, w * 0.53, 0.32, w * 0.53, 0, e.h * y, 0));
+    }
+    group.add(mesh(cylGeo, stone, w * 0.66, 0.4, w * 0.66, 0, e.h + 0.2, 0));
+    group.add(mesh(sphereGeo, band, 0.4, 0.4, 0.4, 0, e.h + 0.65, 0));
+    group.add(blobShadow(w * 0.75));
+    return { group, mats: [stone, band] };
+  }
+
   function createView(e: Entity): EntityView {
     let built: { group: THREE.Group; mats: THREE.MeshLambertMaterial[] };
     if (e.kind === "boss") built = buildBoss();
+    else if (e.kind === "pillar") built = buildPillar(e);
     else if (e.kind === "wall") built = buildWall(e);
     else built = { group: new THREE.Group(), mats: [] }; // 정예: 몸은 인스턴스로 그리고 HP 라벨만 여기서
 
     const sprite = makeSprite(hpTexture(e.kind, e.hp), 1, 0.5);
-    const sw = e.kind === "boss" ? 3.4 : e.kind === "wall" ? 1.8 : 1.4;
+    const sw = e.kind === "boss" ? 3.8 : e.kind === "pillar" ? 2.2 : e.kind === "wall" ? 1.9 : 1.5;
     sprite.scale.set(sw, sw / 2, 1);
     sprite.position.y = e.h + (e.kind === "boss" ? 0.9 : 0.6);
 
     const holder = new THREE.Group();
     holder.add(built.group);
     holder.add(sprite);
+    let shield: THREE.Mesh | undefined;
+    if (e.kind === "boss") {
+      // 방어막 (스테이지 4+ 보스가 잠깐 무적이 될 때 나타남)
+      shield = new THREE.Mesh(
+        sphereGeo,
+        new THREE.MeshBasicMaterial({
+          color: 0x6bd0ff,
+          transparent: true,
+          opacity: 0.35,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        })
+      );
+      shield.scale.set(3.6, 3.4, 3.4);
+      shield.position.y = 2.1;
+      shield.visible = false;
+      holder.add(shield);
+    }
     scene.add(holder);
-    return { group: holder, sprite, flashMats: built.mats, lastHp: e.hp, kind: e.kind };
+    return { group: holder, shield, sprite, flashMats: built.mats, lastHp: e.hp, kind: e.kind };
   }
 
   function removeView(id: number, v: EntityView) {
     scene.remove(v.group);
     (v.sprite.material as THREE.SpriteMaterial).dispose();
     for (const m of v.flashMats) m.dispose();
+    if (v.shield) (v.shield.material as THREE.Material).dispose();
     views.delete(id);
   }
 
@@ -478,13 +568,14 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
   const postMat = track(new THREE.MeshLambertMaterial({ color: 0x2f7dff }));
   const postTopMat = track(new THREE.MeshLambertMaterial({ color: 0xffffff }));
 
-  function createGateView(left: number, right: number): GateView {
+  function createGateView(left: number | null, right: number | null): GateView {
     const group = new THREE.Group();
     const mats: THREE.MeshBasicMaterial[] = [];
     const sprites: THREE.Sprite[] = [];
     const half = ROAD_HALF_WIDTH + 0.2;
     for (const side of [-1, 1]) {
       const value = side < 0 ? left : right;
+      if (value === null) continue; // 이쪽은 뚫려 있음 (몬스터 무리가 서 있는 쪽)
       const good = value >= 0;
       const mat = new THREE.MeshBasicMaterial({
         color: good ? 0x35b8ff : 0xff5a63,
@@ -518,6 +609,8 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
     }
     // 기둥 (가운데 + 양끝)
     for (const px of [-half, 0, half]) {
+      if (px < 0 && left === null) continue;
+      if (px > 0 && right === null) continue;
       group.add(mesh(cylGeo, postMat, 0.13, 1.5, 0.13, px, 0.75, 0));
       group.add(mesh(boxGeo, postTopMat, 0.34, 0.18, 0.34, px, 1.55, 0));
     }
@@ -535,7 +628,7 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
   // ── 떠오르는 숫자 팝업 (+2, -1 ...) ──
   const popups: Popup[] = [];
   function spawnPopup(text: string, good: boolean, x: number, z: number) {
-    const sp = makeSprite(bigNumberTexture(text, "#ffffff", good ? "#0f9d58" : "#d92d45"), 2, 1);
+    const sp = makeSprite(bigNumberTexture(text, "#ffffff", good ? "#0f9d58" : "#d92d45"), 1.2, 0.6);
     scene.add(sp);
     popups.push({ sprite: sp, x, z, life: 0 });
   }
@@ -595,9 +688,24 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
           spawnPopup(ev.value > 0 ? `+${ev.value}` : String(ev.value), ev.value >= 0, ev.x, 0);
           kick = Math.max(kick, ev.value >= 0 ? 0.3 : 0.7);
           break;
+        case "explode":
+          // 큰 폭발: 파편 + 충격파 + 화면 흔들림
+          burst(ev.x, 1.4, ev.z, 80, [0xffd84d, 0xff8a3c, 0xffffff, 0xff5a63], 10);
+          blastT = 0;
+          blastX = ev.x;
+          blastZ = ev.z;
+          blastR = ev.radius;
+          kick = Math.max(kick, 1.9);
+          break;
+        case "bonus":
+          spawnPopup(`+${ev.value}`, true, state.player.x, 0);
+          break;
+        case "stageClear":
+          kick = Math.max(kick, 0.8);
+          break;
         case "levelUp":
           ringT = 0;
-          kick = Math.max(kick, 1);
+          kick = Math.max(kick, 0.6);
           break;
         case "gameOver":
           kick = 1.4;
@@ -707,7 +815,7 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
         sx[i] = snap ? tx : sx[i] + (tx - sx[i]) * follow;
         sz[i] = snap ? tz : sz[i] + (tz - sz[i]) * follow;
         const pop = Math.min(1, (time - born[i]) / 0.28);
-        const k = pop >= 1 ? 1 : pop * (1.25 - 0.25 * pop);
+        const k = (pop >= 1 ? 1 : pop * (1.25 - 0.25 * pop)) * TIGER_SCALE;
         const bob = running ? Math.abs(Math.sin(time * 14 + i * 1.7)) * 0.07 : Math.sin(time * 2.4 + i) * 0.015;
         const x = sx[i];
         const z = sz[i];
@@ -730,9 +838,9 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
 
       // 분대 발밑 원 + 인원수 라벨
       const half = squadHalfWidth(Math.max(1, n));
-      const rows = Math.ceil(n / Math.max(1, Math.min(n, 5, Math.ceil(Math.sqrt(n) * 1.3))));
-      const ringR = half + 0.55;
-      const ringZ = ((rows - 1) * 0.8) / 2;
+      const rows = n > 0 ? Math.round(slots[n - 1].dz / SLOT_DZ) + 1 : 1;
+      const ringR = half + 0.6;
+      const ringZ = ((rows - 1) * SLOT_DZ) / 2;
       squadRing.position.set(state.player.x, 0.05, ringZ);
       squadRing.scale.set(ringR, ringR * (0.55 + rows * 0.08), 1);
       squadDisc.position.set(state.player.x, 0.045, ringZ);
@@ -744,13 +852,13 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
         lastSquadLabel = n;
       }
       squadLabel.visible = n > 0;
-      squadLabel.position.set(state.player.x, 1.95, ringZ);
+      squadLabel.position.set(state.player.x, 2.7, ringZ);
 
       // ── 몬스터 무리(인스턴스) + 벽/보스/정예 라벨(뷰) ──
       const seen = new Set<number>();
       let ei = 0;
       for (const e of state.entities) {
-        if (e.kind === "mob" || e.kind === "elite") {
+        if (e.kind === "mob" || e.kind === "runner" || e.kind === "elite") {
           if (ei >= MAX_ENEMY_INSTANCES) continue;
           const r = e.w / 2;
           const bob = Math.abs(Math.sin(time * 9 + e.seed * 20)) * 0.12 * (e.kind === "elite" ? 1.6 : 1);
@@ -760,7 +868,13 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
           eBody.setColorAt(
             ei,
             tmpColor.setHex(
-              e.flash > 0 ? 0xffffff : e.kind === "elite" ? ELITE_COLOR : MOB_COLORS[Math.floor(e.seed * 4) % 4]
+              e.flash > 0
+                ? 0xffffff
+                : e.kind === "elite"
+                ? ELITE_COLOR
+                : e.kind === "runner"
+                ? RUNNER_COLOR
+                : MOB_COLORS[Math.floor(e.seed * 4) % 4]
             )
           );
           setInstance(eEyes, ei * 2, e.x - r * 0.36, y + r * 0.28, e.z + r * 0.78, r * 0.26, r * 0.3, r * 0.16);
@@ -790,7 +904,7 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
           v.group.position.set(e.x, wob, e.z);
           const squash = 1 + Math.sin(time * 3) * 0.04;
           v.group.scale.set(1 / squash, squash, 1 / squash);
-        } else if (e.kind === "wall") {
+        } else if (e.kind === "wall" || e.kind === "pillar") {
           v.group.position.set(e.x, 0, e.z);
         } else {
           v.group.position.set(e.x, 0.15, e.z);
@@ -803,6 +917,11 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
         }
         const f = e.flash > 0 ? 0.65 : 0;
         for (const m of v.flashMats) m.emissive.setScalar(f);
+        if (v.shield) {
+          const on = (e.shield ?? 0) > 0;
+          v.shield.visible = on;
+          if (on) (v.shield.material as THREE.MeshBasicMaterial).opacity = 0.28 + Math.sin(time * 14) * 0.1;
+        }
       }
       for (const m of [eBody, eShadows]) {
         m.count = ei;
@@ -848,6 +967,19 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
       bullets.instanceMatrix.needsUpdate = true;
       trails.instanceMatrix.needsUpdate = true;
 
+      // ── 보스 투사체 ──
+      const ns = Math.min(state.shots.length, MAX_SHOTS);
+      for (let i = 0; i < ns; i++) {
+        const sh = state.shots[i];
+        const pulse = 1 + Math.sin(time * 18 + i) * 0.12;
+        setInstance(shotMesh, i, sh.x, 1.0, sh.z, 0.42 * pulse, 0.42 * pulse, 0.42 * pulse);
+        setInstance(shotGlow, i, sh.x, 1.0, sh.z, 0.85 * pulse, 0.85 * pulse, 0.85 * pulse);
+      }
+      shotMesh.count = ns;
+      shotGlow.count = ns;
+      shotMesh.instanceMatrix.needsUpdate = true;
+      shotGlow.instanceMatrix.needsUpdate = true;
+
       // ── 파편 ──
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
@@ -888,10 +1020,10 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
           continue;
         }
         const k = p.life / 0.9;
-        p.sprite.position.set(p.x, 2.4 + k * 1.6, p.z);
+        p.sprite.position.set(p.x, 3.3 + k * 1.3, p.z);
         (p.sprite.material as THREE.SpriteMaterial).opacity = k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3;
         const s = 1 + Math.sin(Math.min(1, k * 3) * Math.PI) * 0.25;
-        p.sprite.scale.set(2 * s, 1 * s, 1);
+        p.sprite.scale.set(1.2 * s, 0.6 * s, 1);
       }
 
       // ── 레벨업 링 ──
@@ -899,11 +1031,23 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
         ringT += dt * 1.6;
         ring.visible = true;
         ring.position.x = state.player.x;
-        const s = 0.6 + ringT * 6;
+        const s = 0.6 + ringT * 4;
         ring.scale.set(s, s, s);
-        (ring.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.85 * (1 - ringT));
+        (ring.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.6 * (1 - ringT));
       } else {
         ring.visible = false;
+      }
+
+      // 기둥 폭발 충격파
+      if (blastT < 1) {
+        blastT += dt * 2.2;
+        blast.visible = true;
+        blast.position.set(blastX, 0.08, blastZ);
+        const bs = 1 + blastT * blastR;
+        blast.scale.set(bs, bs, bs);
+        (blast.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.9 * (1 - blastT));
+      } else {
+        blast.visible = false;
       }
 
       // ── 카메라: 낮게 붙어서 따라가며 속도감을 줍니다 ──
@@ -939,6 +1083,8 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
         bullets,
         trails,
         particleMesh,
+        shotMesh,
+        shotGlow,
         sBody,
         sHead,
         sEars,
