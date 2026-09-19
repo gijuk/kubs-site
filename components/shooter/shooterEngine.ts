@@ -22,8 +22,8 @@ export const SQUAD_MAX = 40;
 const KEY_SPEED = 11;
 const DRAG_FOLLOW = 20;
 /** 병력 사이 간격 (캐릭터가 커진 만큼 넓게) */
-export const SLOT_DX = 0.82;
-export const SLOT_DZ = 0.95;
+export const SLOT_DX = 1.0;
+export const SLOT_DZ = 1.15;
 
 // ── 사격 ──
 /** 병력 한 명이 총알을 쏘는 간격 */
@@ -31,10 +31,10 @@ export const FIRE_INTERVAL = 0.25;
 export const BULLET_SPEED = 55;
 export const BULLET_START_Z = -1.0;
 /** 총알 사거리: 이보다 먼 적은 맞힐 수 없어서, 적이 가까이 올 때까지 기다려야 합니다 */
-export const BULLET_RANGE = 30;
+export const BULLET_RANGE = 34;
 
 // ── 스테이지 ──
-export const SPAWN_Z = -40;
+export const SPAWN_Z = -38;
 export const STAGE_LENGTH = 400;
 /** 스테이지 끝(보스 직전)에는 일반 인카운터를 더 만들지 않습니다 */
 const LAST_SPAWN_MARGIN = 40;
@@ -45,7 +45,7 @@ const INTERMISSION = 2.6;
 
 export const MAX_LEVEL = 12;
 
-export type EntityKind = "mob" | "runner" | "elite" | "wall" | "pillar" | "boss";
+export type EntityKind = "mob" | "runner" | "elite" | "spitter" | "wall" | "pillar" | "boss";
 
 export interface Entity {
   id: number;
@@ -73,6 +73,9 @@ export interface Entity {
   passed?: boolean;
   /** 보스 방어막 남은 시간 (이 동안 피해를 받지 않음) */
   shield?: number;
+  /** 원거리 적: 이 z까지 다가오면 멈춰서 투사체를 쏨 */
+  hoverZ?: number;
+  fireCd?: number;
 }
 
 export interface Bullet {
@@ -176,7 +179,7 @@ export interface Slot {
 const formationCache = new Map<number, Slot[]>();
 
 function perRow(n: number): number {
-  return Math.min(n, 7, Math.max(1, Math.ceil(Math.sqrt(n) * 1.3)));
+  return Math.min(n, 6, Math.max(1, Math.ceil(Math.sqrt(n) * 1.3)));
 }
 
 /** 병력 n명이 서는 자리 (분대장 기준 좌우 dx, 뒤쪽 dz). 첫 줄이 맨 앞입니다. */
@@ -196,7 +199,7 @@ export function formation(n: number): Slot[] {
 }
 
 export function squadHalfWidth(n: number): number {
-  return ((perRow(Math.max(1, n)) - 1) / 2) * SLOT_DX + 0.4;
+  return ((perRow(Math.max(1, n)) - 1) / 2) * SLOT_DX + 0.5;
 }
 
 // ── 레벨 ──
@@ -209,16 +212,16 @@ export function expToNext(level: number): number {
 // ── 스테이지별 난이도 곡선 (스테이지 번호만으로 자동 상승) ──
 
 export function scrollSpeed(stage: number): number {
-  return Math.min(12.5, 9 + 0.3 * (stage - 1));
+  return Math.min(15.5, 10.5 + 0.5 * (stage - 1));
 }
 const BOSS_SCROLL_SPEED = 3;
 
 function mobSpeed(stage: number): number {
-  return Math.min(8.5, 3.0 + 0.5 * (stage - 1));
+  return Math.min(11, 3.8 + 0.65 * (stage - 1));
 }
 
 function spawnGap(stage: number): number {
-  return Math.max(1.35, 2.15 - 0.09 * (stage - 1));
+  return Math.max(0.95, 1.7 - 0.08 * (stage - 1));
 }
 
 /** 그 스테이지/진행도에서 "이 정도 병력은 있어야 편하다"고 보는 기준 병력 (1~5 → 3~15 → 5~20 → 10~30 ...) */
@@ -239,7 +242,7 @@ function packMass(stage: number, prog: number): number {
 
 /** 몬스터 한 마리의 평균 체력 */
 function hpAvg(stage: number): number {
-  return 1.4 + 0.6 * (stage - 1);
+  return 1.3 + 0.5 * (stage - 1);
 }
 
 function bossHp(stage: number): number {
@@ -318,9 +321,10 @@ function mobHp(s: ShooterState): number {
   return 1 + Math.floor((s.stage - 1) * 0.6 + progress(s) * 0.8) + (s.rng() < 0.25 ? 1 : 0);
 }
 
-const MOB_W = 1.25;
-const ELITE_W = 2.2;
-const RUNNER_W = 1.05;
+const MOB_W = 1.55;
+const ELITE_W = 2.6;
+const RUNNER_W = 1.3;
+const SPITTER_W = 1.8;
 
 interface MobOpts {
   chase?: number;
@@ -356,7 +360,8 @@ function spawnMob(s: ShooterState, x: number, z: number, o: MobOpts = {}): Entit
     hp,
     maxHp: hp,
     speed: speed * mul,
-    chase: o.chase ?? (kind === "runner" ? 0.35 : 0.22),
+    // 몬스터는 분대를 따라 옆으로 몰리지 않고 자기 차선으로 곧장 달려옵니다 (러너만 살짝 조준)
+    chase: o.chase ?? (kind === "runner" ? 0.25 : 0.04),
     activateZ: o.activateZ,
     group: o.group,
     guard: o.guard,
@@ -371,17 +376,36 @@ function spawnElite(s: ShooterState, x: number, z: number): void {
     z,
     w: ELITE_W,
     d: ELITE_W,
-    h: 2.4,
+    h: 2.9,
     hp,
     maxHp: hp,
-    speed: mobSpeed(s.stage) * 0.55,
-    chase: 0.12,
+    speed: mobSpeed(s.stage) * 0.6,
+    chase: 0.05,
+  });
+}
+
+/** 원거리 적: 어느 정도 다가오면 멈춰서 병력에게 투사체를 쏩니다. 빨리 처치해야 함. */
+function spawnSpitter(s: ShooterState, x: number, z: number): void {
+  const hp = 3 + s.stage + Math.floor(s.rng() * 2);
+  pushEntity(s, {
+    kind: "spitter",
+    x,
+    z,
+    w: SPITTER_W,
+    d: SPITTER_W,
+    h: 2.1,
+    hp,
+    maxHp: hp,
+    speed: mobSpeed(s.stage) * 0.8,
+    chase: 0,
+    hoverZ: -20 - s.rng() * 4,
+    fireCd: 0.8 + s.rng() * 1.2,
   });
 }
 
 function spawnWall(s: ShooterState, x: number, w: number): void {
   const hp = 14 + s.stage * 8 + Math.floor(s.rng() * 6);
-  pushEntity(s, { kind: "wall", x, z: SPAWN_Z, w, d: 1.6, h: 2, hp, maxHp: hp, speed: 0, chase: 0 });
+  pushEntity(s, { kind: "wall", x, z: SPAWN_Z, w, d: 1.8, h: 2.4, hp, maxHp: hp, speed: 0, chase: 0 });
 }
 
 function spawnBoss(s: ShooterState): void {
@@ -392,9 +416,9 @@ function spawnBoss(s: ShooterState): void {
     kind: "boss",
     x: 0,
     z: SPAWN_Z - 4,
-    w: 4.6,
-    d: 3.6,
-    h: 4.2,
+    w: 5.2,
+    d: 4,
+    h: 4.8,
     hp,
     maxHp: hp,
     speed: 2.4,
@@ -407,21 +431,21 @@ function spawnBoss(s: ShooterState): void {
 function spawnPack(s: ShooterState, small = false, intro = false): void {
   const st = s.stage;
   let count = Math.round(packMass(st, progress(s)) / hpAvg(st) + (s.rng() * 2 - 1));
-  count = clamp(small ? Math.ceil(count * 0.5) : count, 3, 30);
+  count = clamp(small ? Math.ceil(count * 0.5) : count, 3, 40);
   // 게임을 처음 켠 직후의 첫 무리: 병력 1명이 조작을 익힐 수 있게 2마리, 조금 느리게
   if (intro) count = 2;
   const cols = Math.min(5, Math.max(3, Math.ceil(Math.sqrt(count * 1.7))));
   const rows = Math.ceil(count / cols);
-  const spacing = 1.5;
+  const spacing = 1.75;
   const width = (cols - 1) * spacing;
-  const limit = ROAD_HALF_WIDTH - 0.9 - width / 2;
+  const limit = ROAD_HALF_WIDTH - 1 - width / 2;
   const cx = (s.rng() * 2 - 1) * Math.max(0, limit);
   const runnerChance = st >= 2 ? Math.min(0.3, 0.1 + 0.03 * st) : 0;
   let placed = 0;
   for (let r = 0; r < rows && placed < count; r++) {
     for (let c = 0; c < cols && placed < count; c++) {
       const x = cx + (c - (cols - 1) / 2) * spacing + (s.rng() - 0.5) * 0.3;
-      const z = SPAWN_Z - 2 - r * 1.6 - s.rng() * 0.4;
+      const z = SPAWN_Z - 2 - r * 1.85 - s.rng() * 0.4;
       spawnMob(s, x, z, {
         kind: s.rng() < runnerChance ? "runner" : "mob",
         speedMul: intro ? 0.45 : 1,
@@ -431,7 +455,14 @@ function spawnPack(s: ShooterState, small = false, intro = false): void {
     }
   }
   if (!small && st >= 2 && s.rng() < 0.3 + 0.03 * st) {
-    spawnElite(s, clamp(cx + (s.rng() - 0.5) * 3, -3, 3), SPAWN_Z - 2 - rows * 1.6 - 2);
+    spawnElite(s, clamp(cx + (s.rng() - 0.5) * 3, -3, 3), SPAWN_Z - 2 - rows * 1.85 - 2);
+  }
+  // 원거리 적 (스테이지 3부터): 무리 뒤쪽에 섞여서 옵니다
+  if (!small && st >= 3 && s.rng() < 0.4) {
+    const n = st >= 6 ? 2 : 1;
+    for (let i = 0; i < n; i++) {
+      spawnSpitter(s, clamp(cx + (i ? 1 : -1) * (1.2 + s.rng() * 1.5), -3.2, 3.2), SPAWN_Z - 4 - i * 2);
+    }
   }
 }
 
@@ -472,7 +503,7 @@ function spawnVersus(s: ShooterState): void {
   const g = clamp(2 + Math.floor(s.rng() * (2 + st * 0.35)), 2, 7);
   const bonus = g + 1;
   // 지금 병력이 감당할 수 있는 한계 근처 (무리를 전멸시킬 수 있는지가 곧 "판단")
-  const count = clamp(Math.round((s.squad * (4.4 + 0.15 * st)) / hpAvg(st)), 3, 26);
+  const count = clamp(Math.round((s.squad * (4.4 + 0.15 * st)) / hpAvg(st)), 3, 30);
 
   s.gates.push({
     id: s.nextId++,
@@ -484,14 +515,14 @@ function spawnVersus(s: ShooterState): void {
 
   const groupId = s.nextId++;
   s.groups.push({ id: groupId, alive: count, breached: false, bonus });
-  const cols = Math.min(4, Math.max(2, Math.ceil(Math.sqrt(count))));
-  const spacing = 1.5;
-  const cx = -gateSide * 2.35;
+  const cols = Math.min(3, Math.max(2, Math.ceil(Math.sqrt(count))));
+  const spacing = 1.75;
+  const cx = -gateSide * 2.3;
   let placed = 0;
   for (let r = 0; placed < count; r++) {
     for (let c = 0; c < cols && placed < count; c++) {
       const x = cx + (c - (cols - 1) / 2) * spacing;
-      spawnMob(s, x, SPAWN_Z - 1 - r * 1.6, {
+      spawnMob(s, x, SPAWN_Z - 1 - r * 1.85, {
         chase: 0,
         activateZ: -24,
         group: groupId,
@@ -509,9 +540,9 @@ function spawnPillar(s: ShooterState): void {
     kind: "pillar",
     x: px,
     z: SPAWN_Z,
-    w: 2.4,
-    d: 2.4,
-    h: 4.2,
+    w: 2.8,
+    d: 2.8,
+    h: 4.8,
     hp: pillarHp(st) + Math.floor(s.rng() * 6),
     maxHp: 0,
     speed: 0,
@@ -519,12 +550,12 @@ function spawnPillar(s: ShooterState): void {
   });
   pillar.maxHp = pillar.hp;
 
-  const count = clamp(Math.round((packMass(st, progress(s)) * 1.15) / hpAvg(st)), 5, 28);
+  const count = clamp(Math.round((packMass(st, progress(s)) * 1.15) / hpAvg(st)), 5, 32);
   const cols = 4;
   for (let i = 0; i < count; i++) {
     const r = Math.floor(i / cols);
     const c = i % cols;
-    spawnMob(s, px + (c - (cols - 1) / 2) * 1.45, SPAWN_Z - 3.2 - r * 1.55, {
+    spawnMob(s, px + (c - (cols - 1) / 2) * 1.75, SPAWN_Z - 3.6 - r * 1.85, {
       stationary: true,
       chase: 0,
       guard: pillar.id,
@@ -535,7 +566,7 @@ function spawnPillar(s: ShooterState): void {
   const side = px > 0 ? -1 : 1;
   const rushers = 2 + Math.floor(st * 0.45);
   for (let i = 0; i < rushers; i++) {
-    spawnMob(s, side * (2.7 + (i % 2) * 0.9), SPAWN_Z - 4 - i * 2.2, {
+    spawnMob(s, side * (2.9 + (i % 2) * 1), SPAWN_Z - 4 - i * 2.3, {
       chase: 0.12,
       kind: st >= 3 && i % 3 === 2 ? "runner" : "mob",
     });
@@ -600,6 +631,11 @@ function spawnEncounter(s: ShooterState): number {
 }
 
 // ── 보스 패턴 ──
+
+function fireAimedShot(s: ShooterState, x: number, z: number, speed: number): void {
+  const travel = Math.max(0.3, (0 - z) / speed);
+  s.shots.push({ id: s.nextId++, x, z, vx: (s.player.x - x) / travel, vz: speed });
+}
 
 function fireBossShots(s: ShooterState, boss: Entity): void {
   const n = s.stage >= 6 ? 3 : s.stage >= 3 ? 2 : 1;
@@ -694,7 +730,7 @@ function stepOnce(s: ShooterState, dt: number): void {
   if (s.intermission <= 0) s.stageDist += scroll * dt;
 
   // 분대장 이동 (분대 폭만큼 안쪽까지만)
-  const limit = ROAD_LIMIT - (squadHalfWidth(s.squad) - 0.4);
+  const limit = ROAD_LIMIT - (squadHalfWidth(s.squad) - 0.5);
   if (s.input.dragTargetX !== null) {
     const target = clamp(s.input.dragTargetX, -limit, limit);
     s.player.x += (target - s.player.x) * (1 - Math.exp(-DRAG_FOLLOW * dt));
@@ -782,7 +818,10 @@ function stepOnce(s: ShooterState, dt: number): void {
     }
     if (hit) {
       if (!(hit.shield && hit.shield > 0)) hit.hp -= 1;
-      hit.flash = 0.08;
+      hit.flash = 0.12;
+      // 맞을 때마다 살짝 뒤로 밀림 (타격감 + 무리가 총알에 밀리는 느낌)
+      if (hit.kind === "mob" || hit.kind === "runner" || hit.kind === "spitter") hit.z -= 0.14;
+      else if (hit.kind === "elite") hit.z -= 0.06;
       s.events.push({ type: "hit", x: b.x, z: hit.z + hit.d / 2, kind: hit.kind });
       continue;
     }
@@ -821,9 +860,9 @@ function stepOnce(s: ShooterState, dt: number): void {
       s.exp += 3;
     } else if (e.kind === "pillar") {
       s.exp += 2;
-    } else if (e.kind === "mob" || e.kind === "runner") {
+    } else if (e.kind === "mob" || e.kind === "runner" || e.kind === "spitter") {
       s.kills += 1;
-      s.exp += 1;
+      s.exp += e.kind === "spitter" ? 2 : 1;
     }
     if (e.group !== undefined) noteGroupDown(s, e.group, false);
   }
@@ -847,7 +886,21 @@ function stepOnce(s: ShooterState, dt: number): void {
   for (const e of s.entities) {
     if (e.kind !== "boss") {
       const awake = e.activateZ === undefined || e.z >= e.activateZ;
-      e.z += (scroll + (awake ? e.speed : 0)) * dt;
+      if (e.hoverZ !== undefined) {
+        // 원거리 적: 정해진 위치까지 다가온 뒤 멈춰서 병력에게 쏨
+        if (e.z < e.hoverZ) {
+          e.z += (scroll + e.speed) * dt;
+        } else {
+          e.z = e.hoverZ;
+          e.fireCd = (e.fireCd ?? 1) - dt;
+          if (e.fireCd <= 0) {
+            fireAimedShot(s, e.x, e.z + e.d / 2, 13);
+            e.fireCd = Math.max(1.5, 2.8 - 0.1 * s.stage);
+          }
+        }
+      } else {
+        e.z += (scroll + (awake ? e.speed : 0)) * dt;
+      }
       if (awake && !e.passed && (e.kind === "mob" || e.kind === "runner" || e.kind === "elite")) {
         e.x += (s.player.x - e.x) * e.chase * dt;
       }
@@ -885,8 +938,9 @@ function stepOnce(s: ShooterState, dt: number): void {
       continue;
     }
 
-    // 몬스터: 분대와 겹치면 병력을 잃고 사라지고, 옆으로 비껴가면 그냥 지나감
-    if (overlaps) {
+    // 몬스터: 분대에 닿으면 (어느 차선이든) 병력을 잃고 사라집니다.
+    // 단, 선택지 무리(+N 게이트 옆에 서 있는 무리)는 옆으로 피해 지나갈 수 있습니다.
+    if (e.group === undefined || overlaps) {
       const dmg = e.kind === "elite" ? 2 : 1;
       const lost = Math.min(dmg, s.squad);
       setSquad(s, s.squad - dmg);

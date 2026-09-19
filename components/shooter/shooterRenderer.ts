@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import {
+  BULLET_RANGE,
   ROAD_HALF_WIDTH,
   SLOT_DZ,
   SQUAD_MAX,
@@ -9,11 +10,12 @@ import {
   type ShooterEvent,
   type ShooterState,
 } from "./shooterEngine";
+import { BOSS_KIT, BRUTE_KIT, GRUNT_KIT, RUNNER_KIT, SPITTER_KIT, TIGER_KIT, type Part } from "./shooterModels";
 
 /**
  * three.js 렌더러: ShooterState(게임 규칙)를 읽어 화면에 그리기만 합니다.
- * 외부 3D 모델 없이 기본 geometry 조합으로 병력/몬스터/장벽을 만들고,
- * 병력·몬스터·총알처럼 개수가 많은 것은 InstancedMesh로 묶어 그려서 모바일에서도 가볍게 돕니다.
+ * 캐릭터/몬스터는 외부 모델 없이 기본 geometry를 부위별로 조합한 "키트"(shooterModels.ts)로 만들고,
+ * 부위마다 InstancedMesh 하나씩만 써서 많은 개체를 적은 draw call로 그립니다.
  */
 
 export interface ShooterRenderer {
@@ -34,27 +36,25 @@ function pillPath(g: CanvasRenderingContext2D, x: number, y: number, w: number, 
 }
 
 const SKY = 0x8fd6ff;
-const MAX_BULLETS = 520;
-const MAX_PARTICLES = 340;
+const MAX_BULLETS = 620;
+const MAX_MUZZLE = 96;
+const MAX_PARTICLES = 420;
 const MAX_SHOTS = 48;
-/** 병력 캐릭터를 크게 (몰입감) */
-const TIGER_SCALE = 1.35;
-const MAX_ENEMY_INSTANCES = 200;
+const MAX_ENEMY = 200;
+const MAX_SPEEDLINES = 34;
 const DASH_ROWS = 15;
 const DASH_SPACING = 8;
 const DECOR_PER_SIDE = 22;
 const DECOR_SPACING = 7;
 const CLOUD_COUNT = 9;
+/** 병력 캐릭터를 크게 (몰입감) */
+const TIGER_SCALE = 1.55;
 
 const DECOR_COLORS = [0xff9eb5, 0xffd166, 0x7ee0c3, 0x8ab6ff, 0xc6a4ff];
 const WALL_COLORS = [0xffb26b, 0x6fd6c0, 0xff8fb1, 0x8fb4ff];
-const MOB_COLORS = [0xa46bf5, 0xa46bf5, 0xb885ff, 0x9a5ff0];
-const ELITE_COLOR = 0xff6f8a;
-const RUNNER_COLOR = 0x4fd98a;
 
 interface EntityView {
   group: THREE.Group;
-  /** 보스 방어막 */
   shield?: THREE.Mesh;
   sprite: THREE.Sprite;
   flashMats: THREE.MeshLambertMaterial[];
@@ -86,6 +86,12 @@ interface Popup {
   x: number;
   z: number;
   life: number;
+}
+
+interface Kit {
+  parts: Part[];
+  meshes: THREE.InstancedMesh[];
+  colors: THREE.Color[];
 }
 
 export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
@@ -120,12 +126,8 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
   const boxGeo = track(new THREE.BoxGeometry(1, 1, 1));
   const coneGeo = track(new THREE.ConeGeometry(1, 1, 8));
   const cylGeo = track(new THREE.CylinderGeometry(1, 1, 1, 10));
-  const white = track(new THREE.MeshBasicMaterial({ color: 0xffffff }));
-  const black = track(new THREE.MeshBasicMaterial({ color: 0x1d1b26 }));
-  const orange = track(new THREE.MeshLambertMaterial({ color: 0xff9a3c }));
-  const stripe = track(new THREE.MeshLambertMaterial({ color: 0x2b1b12 }));
-  const gray = track(new THREE.MeshLambertMaterial({ color: 0x5f6675 }));
-  const gold = track(new THREE.MeshLambertMaterial({ color: 0xffd84d }));
+  const geos = { sphere: sphereGeo, box: boxGeo, cone: coneGeo, cyl: cylGeo };
+  const white = new THREE.Color(0xffffff);
 
   function mesh(
     geo: THREE.BufferGeometry,
@@ -164,6 +166,62 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
     dummy.rotation.set(0, ry, 0);
     dummy.updateMatrix();
     im.setMatrixAt(i, dummy.matrix);
+  }
+
+  // ── 부위별 키트(InstancedMesh 묶음) ──
+  function makeKit(parts: Part[], cap: number): Kit {
+    const meshes: THREE.InstancedMesh[] = [];
+    const colors: THREE.Color[] = [];
+    for (const pt of parts) {
+      const mat = track(
+        pt.glow
+          ? new THREE.MeshBasicMaterial({ color: 0xffffff })
+          : new THREE.MeshLambertMaterial({ color: 0xffffff })
+      );
+      const im = new THREE.InstancedMesh(geos[pt.g], mat, cap);
+      im.frustumCulled = false;
+      im.count = 0;
+      for (let i = 0; i < cap; i++) im.setColorAt(i, white);
+      scene.add(im);
+      meshes.push(im);
+      colors.push(new THREE.Color(pt.c));
+    }
+    return { parts, meshes, colors };
+  }
+
+  /**
+   * 키트 한 개체를 i번째 인스턴스로 그립니다.
+   * k = 크기 배율, t = 걷기/흔들림 위상, flash = 피격 시 하얗게 번쩍
+   */
+  function drawKit(kit: Kit, i: number, x: number, y: number, z: number, k: number, t: number, flash: boolean) {
+    const { parts, meshes, colors } = kit;
+    for (let j = 0; j < parts.length; j++) {
+      const pt = parts[j];
+      let px = pt.p[0] * k;
+      let py = pt.p[1] * k;
+      let pz = pt.p[2] * k;
+      let rx = pt.rx ?? 0;
+      if (pt.swing) {
+        const sw = Math.sin(t + (pt.ph ?? 0)) * pt.swing;
+        pz += sw * k * 0.45;
+        rx += sw * 0.8;
+      }
+      if (pt.wag) px += Math.sin(t * 0.6 + (pt.ph ?? 0)) * pt.wag * k;
+      dummy.position.set(x + px, y + py, z + pz);
+      dummy.rotation.set(rx, 0, pt.rz ?? 0);
+      dummy.scale.set(pt.s[0] * k, pt.s[1] * k, pt.s[2] * k);
+      dummy.updateMatrix();
+      meshes[j].setMatrixAt(i, dummy.matrix);
+      meshes[j].setColorAt(i, flash && !pt.keep ? white : colors[j]);
+    }
+  }
+
+  function finishKit(kit: Kit, count: number) {
+    for (const m of kit.meshes) {
+      m.count = count;
+      m.instanceMatrix.needsUpdate = true;
+      if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    }
   }
 
   // ── 도로 ──
@@ -205,6 +263,29 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
     s: 2.2 + ((i * 29) % 10) * 0.25,
   }));
 
+  // 속도선: 카메라 쪽으로 빠르게 스쳐 지나가는 가느다란 빛줄기 (속도감)
+  const speedLines = new THREE.InstancedMesh(
+    boxGeo,
+    track(
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.32,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    ),
+    MAX_SPEEDLINES
+  );
+  speedLines.frustumCulled = false;
+  scene.add(speedLines);
+  const lineSeeds = Array.from({ length: MAX_SPEEDLINES }, (_, i) => ({
+    x: (((i * 7919) % 100) / 100) * 15 - 7.5,
+    y: 0.4 + (((i * 104729) % 100) / 100) * 3.4,
+    z: (((i * 1299709) % 100) / 100) * 60,
+    len: 2 + (((i * 15485863) % 100) / 100) * 3,
+  }));
+
   // ── 바닥 그림자 / 병력 위치 표시 링 ──
   const shadowGeo = track(new THREE.CircleGeometry(1, 20));
   const shadowMat = track(
@@ -218,7 +299,6 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
     return m;
   }
 
-  // 분대 발밑의 초록 원 (레퍼런스처럼 "여기가 내 병력")
   const squadRing = new THREE.Mesh(
     track(new THREE.RingGeometry(0.9, 1, 48)),
     track(
@@ -244,39 +324,26 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
   squadDisc.position.y = 0.045;
   scene.add(squadDisc);
 
-  // ── 병력(귀여운 호랑이) — 파츠별 InstancedMesh ──
+  // ── 캐릭터/몬스터 키트 ──
   const SQ = SQUAD_MAX + 4;
-  const sBody = new THREE.InstancedMesh(sphereGeo, orange, SQ);
-  const sHead = new THREE.InstancedMesh(sphereGeo, orange, SQ);
-  const sEars = new THREE.InstancedMesh(sphereGeo, orange, SQ * 2);
-  const sStripes = new THREE.InstancedMesh(boxGeo, stripe, SQ * 2);
-  const sGun = new THREE.InstancedMesh(boxGeo, gray, SQ);
-  for (const m of [sBody, sHead, sEars, sStripes, sGun]) {
-    m.frustumCulled = false;
-    scene.add(m);
-  }
+  const tigerKit = makeKit(TIGER_KIT, SQ);
+  const gruntKit = makeKit(GRUNT_KIT, MAX_ENEMY);
+  const runnerKit = makeKit(RUNNER_KIT, MAX_ENEMY);
+  const bruteKit = makeKit(BRUTE_KIT, 24);
+  const spitterKit = makeKit(SPITTER_KIT, 24);
+  const bossKit = makeKit(BOSS_KIT, 2);
+  const kits = [tigerKit, gruntKit, runnerKit, bruteKit, spitterKit, bossKit];
+
+  const eShadows = new THREE.InstancedMesh(shadowGeo, shadowMat, MAX_ENEMY + 48);
+  eShadows.frustumCulled = false;
+  scene.add(eShadows);
+
   const sx = new Float32Array(SQ);
   const sz = new Float32Array(SQ);
   const born = new Float32Array(SQ);
   let prevSquad = 0;
 
-  // ── 몬스터(무리) — 몸통/눈/뿔 InstancedMesh ──
-  const eBody = new THREE.InstancedMesh(
-    sphereGeo,
-    track(new THREE.MeshLambertMaterial({ color: 0xffffff })),
-    MAX_ENEMY_INSTANCES
-  );
-  const eEyes = new THREE.InstancedMesh(sphereGeo, white, MAX_ENEMY_INSTANCES * 2);
-  const ePupils = new THREE.InstancedMesh(sphereGeo, black, MAX_ENEMY_INSTANCES * 2);
-  const eHorns = new THREE.InstancedMesh(coneGeo, gold, MAX_ENEMY_INSTANCES * 2);
-  const eShadows = new THREE.InstancedMesh(shadowGeo, shadowMat, MAX_ENEMY_INSTANCES);
-  for (const m of [eBody, eEyes, ePupils, eHorns, eShadows]) {
-    m.frustumCulled = false;
-    scene.add(m);
-  }
-  for (let i = 0; i < MAX_ENEMY_INSTANCES; i++) eBody.setColorAt(i, tmpColor.setHex(0xa46bf5));
-
-  // ── 총알 + 궤적 ──
+  // ── 총알 + 궤적 + 총구 섬광 ──
   const bullets = new THREE.InstancedMesh(
     sphereGeo,
     track(new THREE.MeshBasicMaterial({ color: 0xfff36b })),
@@ -284,7 +351,7 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
   );
   bullets.frustumCulled = false;
   scene.add(bullets);
-  const trailGeo = track(new THREE.BoxGeometry(0.09, 0.09, 1));
+  const trailGeo = track(new THREE.BoxGeometry(0.11, 0.11, 1));
   trailGeo.translate(0, 0, 0.5);
   const trails = new THREE.InstancedMesh(
     trailGeo,
@@ -292,7 +359,7 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
       new THREE.MeshBasicMaterial({
         color: 0xffb830,
         transparent: true,
-        opacity: 0.55,
+        opacity: 0.6,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       })
@@ -301,6 +368,21 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
   );
   trails.frustumCulled = false;
   scene.add(trails);
+  const muzzle = new THREE.InstancedMesh(
+    sphereGeo,
+    track(
+      new THREE.MeshBasicMaterial({
+        color: 0xffe27a,
+        transparent: true,
+        opacity: 0.85,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    ),
+    MAX_MUZZLE
+  );
+  muzzle.frustumCulled = false;
+  scene.add(muzzle);
 
   // ── 파편 ──
   const particleMesh = new THREE.InstancedMesh(
@@ -313,7 +395,7 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
   scene.add(particleMesh);
   const particles: Particle[] = [];
 
-  // ── 보스 투사체 (빨간 구슬, 총알로 격추 가능) ──
+  // ── 보스/원거리 적 투사체 (빨간 구슬, 총알로 격추 가능) ──
   const shotMesh = new THREE.InstancedMesh(
     sphereGeo,
     track(new THREE.MeshBasicMaterial({ color: 0xff4d5e })),
@@ -337,7 +419,7 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
     scene.add(m);
   }
 
-  // ── 레벨업 링 ──
+  // ── 레벨업 링 / 기둥 폭발 충격파 ──
   const ring = new THREE.Mesh(
     track(new THREE.RingGeometry(0.85, 1, 40)),
     track(
@@ -356,7 +438,6 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
   scene.add(ring);
   let ringT = 1;
 
-  // 기둥 폭발 충격파
   const blast = new THREE.Mesh(
     track(new THREE.RingGeometry(0.8, 1, 48)),
     track(
@@ -460,33 +541,12 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
     return sp;
   }
 
-  // 분대 인원수 표시 (병력 머리 위)
   const squadLabel = makeSprite(squadTexture(SQUAD_MAX), 1.3, 0.65);
   scene.add(squadLabel);
   let lastSquadLabel = -1;
 
-  // ── 벽/보스/정예 뷰 ──
+  // ── 벽/기둥/보스/정예 라벨 뷰 (몸은 키트로 그리고, 벽·기둥만 자체 모델) ──
   const views = new Map<number, EntityView>();
-
-  function buildBoss(): { group: THREE.Group; mats: THREE.MeshLambertMaterial[] } {
-    const group = new THREE.Group();
-    const bodyMat = new THREE.MeshLambertMaterial({ color: 0xff5c6c });
-    const limbMat = new THREE.MeshLambertMaterial({ color: 0xd8404f });
-    group.add(mesh(sphereGeo, bodyMat, 0.62, 0.58, 0.6, 0, 0.62, 0));
-    group.add(mesh(sphereGeo, white, 0.17, 0.2, 0.1, -0.24, 0.78, 0.52));
-    group.add(mesh(sphereGeo, white, 0.17, 0.2, 0.1, 0.24, 0.78, 0.52));
-    group.add(mesh(sphereGeo, black, 0.075, 0.09, 0.05, -0.24, 0.76, 0.6));
-    group.add(mesh(sphereGeo, black, 0.075, 0.09, 0.05, 0.24, 0.76, 0.6));
-    group.add(mesh(boxGeo, black, 0.3, 0.07, 0.05, 0, 0.5, 0.58));
-    for (const dx of [-0.32, 0, 0.32]) group.add(mesh(coneGeo, gold, 0.12, 0.34, 0.12, dx, 1.42, 0));
-    group.add(mesh(sphereGeo, limbMat, 0.14, 0.14, 0.14, -0.62, 0.55, 0.15));
-    group.add(mesh(sphereGeo, limbMat, 0.14, 0.14, 0.14, 0.62, 0.55, 0.15));
-    group.add(mesh(sphereGeo, limbMat, 0.17, 0.1, 0.2, -0.28, 0.08, 0.1));
-    group.add(mesh(sphereGeo, limbMat, 0.17, 0.1, 0.2, 0.28, 0.08, 0.1));
-    group.add(blobShadow(0.85));
-    group.scale.setScalar(3.4);
-    return { group, mats: [bodyMat, limbMat] };
-  }
 
   function buildWall(e: Entity): { group: THREE.Group; mats: THREE.MeshLambertMaterial[] } {
     const group = new THREE.Group();
@@ -520,15 +580,14 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
 
   function createView(e: Entity): EntityView {
     let built: { group: THREE.Group; mats: THREE.MeshLambertMaterial[] };
-    if (e.kind === "boss") built = buildBoss();
-    else if (e.kind === "pillar") built = buildPillar(e);
+    if (e.kind === "pillar") built = buildPillar(e);
     else if (e.kind === "wall") built = buildWall(e);
-    else built = { group: new THREE.Group(), mats: [] }; // 정예: 몸은 인스턴스로 그리고 HP 라벨만 여기서
+    else built = { group: new THREE.Group(), mats: [] }; // 정예/보스: 몸은 키트, 여기선 HP 라벨만
 
     const sprite = makeSprite(hpTexture(e.kind, e.hp), 1, 0.5);
-    const sw = e.kind === "boss" ? 3.8 : e.kind === "pillar" ? 2.2 : e.kind === "wall" ? 1.9 : 1.5;
+    const sw = e.kind === "boss" ? 4 : e.kind === "pillar" ? 2.4 : e.kind === "wall" ? 2 : 1.7;
     sprite.scale.set(sw, sw / 2, 1);
-    sprite.position.y = e.h + (e.kind === "boss" ? 0.9 : 0.6);
+    sprite.position.y = e.h + (e.kind === "boss" ? 0.8 : 0.6);
 
     const holder = new THREE.Group();
     holder.add(built.group);
@@ -546,8 +605,8 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
           depthWrite: false,
         })
       );
-      shield.scale.set(3.6, 3.4, 3.4);
-      shield.position.y = 2.1;
+      shield.scale.set(4.6, 4.4, 4.4);
+      shield.position.y = 2.6;
       shield.visible = false;
       holder.add(shield);
     }
@@ -588,7 +647,6 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
       band.scale.set(half, 0.06, 2.0);
       band.position.set(side * (half / 2), 0.05, 0);
       group.add(band);
-      // 밝은 테두리선
       const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
       mats.push(lineMat);
       for (const dz of [-1.0, 1.0]) {
@@ -598,16 +656,11 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
         group.add(line);
       }
       const text = value > 0 ? `+${value}` : String(value);
-      const sp = makeSprite(
-        bigNumberTexture(text, "#ffffff", good ? "#0b5ea8" : "#a3142a"),
-        2.6,
-        1.3
-      );
+      const sp = makeSprite(bigNumberTexture(text, "#ffffff", good ? "#0b5ea8" : "#a3142a"), 2.6, 1.3);
       sp.position.set(side * (half / 2), 1.15, 0);
       group.add(sp);
       sprites.push(sp);
     }
-    // 기둥 (가운데 + 양끝)
     for (const px of [-half, 0, half]) {
       if (px < 0 && left === null) continue;
       if (px > 0 && right === null) continue;
@@ -655,16 +708,21 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
   }
 
   let kick = 0;
+  /** 총알이 맞을 때마다 쌓이는 미세한 화면 흔들림 (총 쏘는 손맛) */
+  let impact = 0;
   let scroll = 0;
   let time = 0;
   let aspect = 9 / 16;
   let speedFov = 0;
+  let hitsThisFrame = 0;
 
   function handleEvents(events: ShooterEvent[], state: ShooterState) {
     for (const ev of events) {
       switch (ev.type) {
         case "hit":
-          if (Math.random() < 0.35) burst(ev.x, 0.9, ev.z, 1, [0xfff36b, 0xffffff], 2.5);
+          hitsThisFrame++;
+          burst(ev.x, 1.0, ev.z, 2, [0xfff36b, 0xffffff, 0xffb830], 4);
+          impact = Math.min(0.7, impact + 0.05);
           break;
         case "kill": {
           const cols =
@@ -674,9 +732,14 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
               ? [0xff5c6c, 0xffd84d, 0xffffff]
               : ev.kind === "elite"
               ? [0xff6f8a, 0xffe066, 0xffffff]
-              : [0xa46bf5, 0xffe066];
-          const n = ev.kind === "boss" ? 46 : ev.kind === "wall" ? 16 : ev.kind === "elite" ? 14 : 5;
-          burst(ev.x, 0.8, ev.z, n, cols, ev.kind === "boss" ? 7 : 4.5);
+              : ev.kind === "runner"
+              ? [0xf29a2e, 0xffe066]
+              : ev.kind === "spitter"
+              ? [0x7d52c4, 0x7dff4a]
+              : [0x5aa84a, 0xffe066, 0xff4a4a];
+          const n = ev.kind === "boss" ? 46 : ev.kind === "wall" ? 16 : ev.kind === "elite" ? 16 : 6;
+          burst(ev.x, 0.9, ev.z, n, cols, ev.kind === "boss" ? 7 : 5);
+          impact = Math.min(0.9, impact + (ev.kind === "boss" ? 0.6 : ev.kind === "elite" ? 0.22 : 0.06));
           break;
         }
         case "hurt":
@@ -689,7 +752,6 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
           kick = Math.max(kick, ev.value >= 0 ? 0.3 : 0.7);
           break;
         case "explode":
-          // 큰 폭발: 파편 + 충격파 + 화면 흔들림
           burst(ev.x, 1.4, ev.z, 80, [0xffd84d, 0xff8a3c, 0xffffff, 0xff5a63], 10);
           blastT = 0;
           blastX = ev.x;
@@ -718,7 +780,7 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
 
   function fitCamera() {
     // 가로로 항상 같은 폭(도로 전체)이 보이도록 세로 시야각을 화면 비율에 맞춰 계산합니다.
-    const hFov = (50 * Math.PI) / 180;
+    const hFov = (46 * Math.PI) / 180;
     const vFov = 2 * Math.atan(Math.tan(hFov / 2) / aspect);
     camera.fov = Math.min(84, Math.max(38, (vFov * 180) / Math.PI)) + speedFov;
     camera.aspect = aspect;
@@ -737,6 +799,8 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
     render(state: ShooterState, dt: number) {
       time += dt;
       kick = Math.max(0, kick - dt * 2.4);
+      impact *= Math.exp(-9 * dt);
+      hitsThisFrame = 0;
       handleEvents(state.events, state);
 
       scroll = state.phase === "ready" ? scroll + dt * 3 : state.phase === "playing" ? state.distance : scroll;
@@ -788,8 +852,18 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
       }
       clouds.instanceMatrix.needsUpdate = true;
 
-      // ── 병력 ──
+      // 속도선 (달리는 중에만 보임)
       const running = state.phase === "playing";
+      const lineCount = running ? MAX_SPEEDLINES : 0;
+      for (let i = 0; i < lineCount; i++) {
+        const l = lineSeeds[i];
+        const z = 14 - wrap(l.z * 1.0 - scroll * 2.4, 66);
+        setInstance(speedLines, i, l.x, l.y, z, 0.03, 0.03, l.len);
+      }
+      speedLines.count = lineCount;
+      speedLines.instanceMatrix.needsUpdate = true;
+
+      // ── 병력(호랑이 키트) ──
       const n = state.squad;
       const slots = formation(Math.max(1, n));
       // 새 판이 시작됐거나 병력이 처음 나타나면 자리로 바로 이동
@@ -808,7 +882,6 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
       prevSquad = n;
 
       const follow = 1 - Math.exp(-14 * dt);
-      const moving = running ? state.input.moveDir : 0;
       for (let i = 0; i < n; i++) {
         const tx = state.player.x + slots[i].dx;
         const tz = slots[i].dz;
@@ -816,25 +889,12 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
         sz[i] = snap ? tz : sz[i] + (tz - sz[i]) * follow;
         const pop = Math.min(1, (time - born[i]) / 0.28);
         const k = (pop >= 1 ? 1 : pop * (1.25 - 0.25 * pop)) * TIGER_SCALE;
-        const bob = running ? Math.abs(Math.sin(time * 14 + i * 1.7)) * 0.07 : Math.sin(time * 2.4 + i) * 0.015;
-        const x = sx[i];
-        const z = sz[i];
-        setInstance(sBody, i, x, bob + 0.42 * k, z, 0.34 * k, 0.36 * k, 0.32 * k);
-        setInstance(sHead, i, x, bob + 0.88 * k, z - 0.02, 0.29 * k, 0.27 * k, 0.26 * k);
-        setInstance(sEars, i * 2, x - 0.2 * k, bob + 1.1 * k, z, 0.09 * k, 0.09 * k, 0.06 * k);
-        setInstance(sEars, i * 2 + 1, x + 0.2 * k, bob + 1.1 * k, z, 0.09 * k, 0.09 * k, 0.06 * k);
-        setInstance(sStripes, i * 2, x, bob + 0.5 * k, z + 0.3 * k, 0.36 * k, 0.05 * k, 0.04 * k);
-        setInstance(sStripes, i * 2 + 1, x, bob + 0.65 * k, z + 0.27 * k, 0.3 * k, 0.05 * k, 0.04 * k);
-        setInstance(sGun, i, x + 0.22 * k, bob + 0.55 * k, z - 0.28 * k, 0.08 * k, 0.08 * k, 0.4 * k, -moving * 0.05);
+        const bob = running ? Math.abs(Math.sin(time * 14 + i * 1.7)) * 0.08 : Math.sin(time * 2.4 + i) * 0.015;
+        // 총을 쏠 때 몸이 살짝 뒤로 밀리는 반동
+        const recoil = running ? Math.max(0, Math.sin(time * 25.1 + i * 2.3)) * 0.02 : 0;
+        drawKit(tigerKit, i, sx[i], bob, sz[i] + recoil, k, running ? time * 14 + i : time * 2 + i, false);
       }
-      for (const m of [sBody, sHead, sGun]) {
-        m.count = n;
-        m.instanceMatrix.needsUpdate = true;
-      }
-      sEars.count = n * 2;
-      sStripes.count = n * 2;
-      sEars.instanceMatrix.needsUpdate = true;
-      sStripes.instanceMatrix.needsUpdate = true;
+      finishKit(tigerKit, n);
 
       // 분대 발밑 원 + 인원수 라벨
       const half = squadHalfWidth(Math.max(1, n));
@@ -852,46 +912,43 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
         lastSquadLabel = n;
       }
       squadLabel.visible = n > 0;
-      squadLabel.position.set(state.player.x, 2.7, ringZ);
+      squadLabel.position.set(state.player.x, 3.2, ringZ);
 
-      // ── 몬스터 무리(인스턴스) + 벽/보스/정예 라벨(뷰) ──
+      // ── 몬스터(키트) + 벽/기둥/정예/보스 라벨(뷰) ──
       const seen = new Set<number>();
-      let ei = 0;
+      let cg = 0;
+      let cr = 0;
+      let cb = 0;
+      let cs = 0;
+      let cB = 0;
+      let cShadow = 0;
       for (const e of state.entities) {
-        if (e.kind === "mob" || e.kind === "runner" || e.kind === "elite") {
-          if (ei >= MAX_ENEMY_INSTANCES) continue;
-          const r = e.w / 2;
-          const bob = Math.abs(Math.sin(time * 9 + e.seed * 20)) * 0.12 * (e.kind === "elite" ? 1.6 : 1);
-          const squash = 1 + Math.sin(time * 9 + e.seed * 20) * 0.06;
-          const y = bob + r * 0.95;
-          setInstance(eBody, ei, e.x, y, e.z, r / squash, r * 0.92 * squash, r * 0.95 / squash);
-          eBody.setColorAt(
-            ei,
-            tmpColor.setHex(
-              e.flash > 0
-                ? 0xffffff
-                : e.kind === "elite"
-                ? ELITE_COLOR
-                : e.kind === "runner"
-                ? RUNNER_COLOR
-                : MOB_COLORS[Math.floor(e.seed * 4) % 4]
-            )
-          );
-          setInstance(eEyes, ei * 2, e.x - r * 0.36, y + r * 0.28, e.z + r * 0.78, r * 0.26, r * 0.3, r * 0.16);
-          setInstance(eEyes, ei * 2 + 1, e.x + r * 0.36, y + r * 0.28, e.z + r * 0.78, r * 0.26, r * 0.3, r * 0.16);
-          setInstance(ePupils, ei * 2, e.x - r * 0.36, y + r * 0.24, e.z + r * 0.9, r * 0.11, r * 0.13, r * 0.08);
-          setInstance(ePupils, ei * 2 + 1, e.x + r * 0.36, y + r * 0.24, e.z + r * 0.9, r * 0.11, r * 0.13, r * 0.08);
-          setInstance(eHorns, ei * 2, e.x - r * 0.55, y + r * 0.95, e.z, r * 0.2, r * 0.5, r * 0.2);
-          setInstance(eHorns, ei * 2 + 1, e.x + r * 0.55, y + r * 0.95, e.z, r * 0.2, r * 0.5, r * 0.2);
-          // 그림자는 바닥에 눕혀서
-          dummy.rotation.set(-Math.PI / 2, 0, 0);
-          dummy.position.set(e.x, 0.03, e.z);
-          dummy.scale.set(r * 1.05, r * 1.05, r * 1.05);
-          dummy.updateMatrix();
-          eShadows.setMatrixAt(ei, dummy.matrix);
-          ei++;
-          if (e.kind !== "elite") continue;
+        const flash = e.flash > 0;
+        const r = e.w / 2;
+        const pop = flash ? 1.1 : 1;
+        if (e.kind === "mob" && cg < MAX_ENEMY) {
+          const bob = Math.abs(Math.sin(time * 10 + e.seed * 20)) * 0.12;
+          drawKit(gruntKit, cg++, e.x, bob, e.z, r * pop, time * 10 + e.seed * 20, flash);
+          shadowAt(cShadow++, e.x, e.z, r * 1.1);
+        } else if (e.kind === "runner" && cr < MAX_ENEMY) {
+          const bob = Math.abs(Math.sin(time * 16 + e.seed * 20)) * 0.1;
+          drawKit(runnerKit, cr++, e.x, bob, e.z, r * pop, time * 18 + e.seed * 20, flash);
+          shadowAt(cShadow++, e.x, e.z, r * 1.2);
+        } else if (e.kind === "elite" && cb < 24) {
+          const bob = Math.abs(Math.sin(time * 6 + e.seed * 20)) * 0.16;
+          drawKit(bruteKit, cb++, e.x, bob, e.z, r * pop, time * 6 + e.seed * 20, flash);
+          shadowAt(cShadow++, e.x, e.z, r * 1.1);
+        } else if (e.kind === "spitter" && cs < 24) {
+          const bob = Math.abs(Math.sin(time * 4 + e.seed * 20)) * 0.1;
+          drawKit(spitterKit, cs++, e.x, bob, e.z, r * pop, time * 4 + e.seed * 20, flash);
+          shadowAt(cShadow++, e.x, e.z, r * 1.1);
+        } else if (e.kind === "boss" && cB < 2) {
+          const wob = Math.abs(Math.sin(time * 3 + e.seed * 10)) * 0.25;
+          drawKit(bossKit, cB++, e.x, wob, e.z, r * 0.62 * pop, time * 3, flash);
+          shadowAt(cShadow++, e.x, e.z, r * 0.9);
         }
+
+        if (e.kind === "mob" || e.kind === "runner" || e.kind === "spitter") continue;
 
         seen.add(e.id);
         let v = views.get(e.id);
@@ -900,10 +957,7 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
           views.set(e.id, v);
         }
         if (e.kind === "boss") {
-          const wob = Math.abs(Math.sin(time * 3 + e.seed * 10)) * 0.25;
-          v.group.position.set(e.x, wob, e.z);
-          const squash = 1 + Math.sin(time * 3) * 0.04;
-          v.group.scale.set(1 / squash, squash, 1 / squash);
+          v.group.position.set(e.x, Math.abs(Math.sin(time * 3 + e.seed * 10)) * 0.25, e.z);
         } else if (e.kind === "wall" || e.kind === "pillar") {
           v.group.position.set(e.x, 0, e.z);
         } else {
@@ -923,17 +977,23 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
           if (on) (v.shield.material as THREE.MeshBasicMaterial).opacity = 0.28 + Math.sin(time * 14) * 0.1;
         }
       }
-      for (const m of [eBody, eShadows]) {
-        m.count = ei;
-        m.instanceMatrix.needsUpdate = true;
-      }
-      for (const m of [eEyes, ePupils, eHorns]) {
-        m.count = ei * 2;
-        m.instanceMatrix.needsUpdate = true;
-      }
-      if (eBody.instanceColor) eBody.instanceColor.needsUpdate = true;
+      finishKit(gruntKit, cg);
+      finishKit(runnerKit, cr);
+      finishKit(bruteKit, cb);
+      finishKit(spitterKit, cs);
+      finishKit(bossKit, cB);
+      eShadows.count = cShadow;
+      eShadows.instanceMatrix.needsUpdate = true;
       for (const [id, v] of views) {
         if (!seen.has(id)) removeView(id, v);
+      }
+
+      function shadowAt(i: number, x: number, z: number, rad: number) {
+        dummy.rotation.set(-Math.PI / 2, 0, 0);
+        dummy.position.set(x, 0.03, z);
+        dummy.scale.set(rad, rad, rad);
+        dummy.updateMatrix();
+        eShadows.setMatrixAt(i, dummy.matrix);
       }
 
       // ── 장벽(게이트) ──
@@ -955,19 +1015,29 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
         if (!seenGates.has(id)) removeGateView(id, gv);
       }
 
-      // ── 총알 + 궤적 ──
+      // ── 총알 + 궤적 + 총구 섬광 ──
       const nb = Math.min(state.bullets.length, MAX_BULLETS);
+      let nm = 0;
       for (let i = 0; i < nb; i++) {
         const b = state.bullets[i];
-        setInstance(bullets, i, b.x, 0.7, b.z, 0.2, 0.2, 0.2);
-        setInstance(trails, i, b.x, 0.7, b.z, 1, 1, 3.2);
+        setInstance(bullets, i, b.x, 0.9, b.z, 0.26, 0.26, 0.26);
+        setInstance(trails, i, b.x, 0.9, b.z, 1.4, 1.4, 3.6);
+        // 막 발사된 총알에는 총구 섬광
+        const travelled = b.endZ + BULLET_RANGE - b.z;
+        if (travelled < 2.2 && nm < MAX_MUZZLE) {
+          const f = 1 - travelled / 2.2;
+          const s = 0.22 + f * 0.42;
+          setInstance(muzzle, nm++, b.x, 0.9, b.z + 0.25, s, s, s * 1.4);
+        }
       }
       bullets.count = nb;
       trails.count = nb;
+      muzzle.count = nm;
       bullets.instanceMatrix.needsUpdate = true;
       trails.instanceMatrix.needsUpdate = true;
+      muzzle.instanceMatrix.needsUpdate = true;
 
-      // ── 보스 투사체 ──
+      // ── 적 투사체 ──
       const ns = Math.min(state.shots.length, MAX_SHOTS);
       for (let i = 0; i < ns; i++) {
         const sh = state.shots[i];
@@ -1020,13 +1090,13 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
           continue;
         }
         const k = p.life / 0.9;
-        p.sprite.position.set(p.x, 3.3 + k * 1.3, p.z);
+        p.sprite.position.set(p.x, 3.9 + k * 1.3, p.z);
         (p.sprite.material as THREE.SpriteMaterial).opacity = k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3;
         const s = 1 + Math.sin(Math.min(1, k * 3) * Math.PI) * 0.25;
         p.sprite.scale.set(1.2 * s, 0.6 * s, 1);
       }
 
-      // ── 레벨업 링 ──
+      // ── 레벨업 링 / 기둥 폭발 충격파 ──
       if (ringT < 1) {
         ringT += dt * 1.6;
         ring.visible = true;
@@ -1037,8 +1107,6 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
       } else {
         ring.visible = false;
       }
-
-      // 기둥 폭발 충격파
       if (blastT < 1) {
         blastT += dt * 2.2;
         blast.visible = true;
@@ -1050,18 +1118,17 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
         blast.visible = false;
       }
 
-      // ── 카메라: 낮게 붙어서 따라가며 속도감을 줍니다 ──
+      // ── 카메라: 높이 떠서 가깝게 내려다보며, 사격 임팩트에 따라 미세하게 흔들림 ──
       const px = state.player.x;
-      const shake = kick * 0.14;
-      const targetFov = running ? 5 : 0;
+      const shake = kick * 0.14 + impact * 0.075;
+      const targetFov = running ? 7 : 0;
       speedFov += (targetFov - speedFov) * Math.min(1, dt * 3);
       fitCamera();
-      // 레퍼런스처럼 높이 떠서 가깝게 내려다보는 시점 (병력이 늘면 조금 뒤로 물러나 전체가 보이게)
-      const camZ = 7.6 + Math.max(0, rows - 1) * 0.5;
+      const camZ = 7.8 + Math.max(0, rows - 1) * 0.6;
       camera.position.set(
         px * 0.6 + (Math.random() - 0.5) * shake,
-        8.0 + kick * 0.3 + Math.max(0, rows - 1) * 0.3 + (Math.random() - 0.5) * shake,
-        camZ
+        8.2 + kick * 0.3 + Math.max(0, rows - 1) * 0.32 + (Math.random() - 0.5) * shake,
+        camZ + (Math.random() - 0.5) * impact * 0.05
       );
       camera.lookAt(px * 0.4, 0.3, -7);
 
@@ -1076,24 +1143,18 @@ export function createRenderer(canvas: HTMLCanvasElement): ShooterRenderer {
       for (const t of textures.values()) t.dispose();
       textures.clear();
       for (const d of disposables) d.dispose();
+      for (const k of kits) for (const m of k.meshes) m.dispose();
       for (const m of [
         dashes,
         decor,
         clouds,
+        speedLines,
         bullets,
         trails,
+        muzzle,
         particleMesh,
         shotMesh,
         shotGlow,
-        sBody,
-        sHead,
-        sEars,
-        sStripes,
-        sGun,
-        eBody,
-        eEyes,
-        ePupils,
-        eHorns,
         eShadows,
       ]) {
         m.dispose();
